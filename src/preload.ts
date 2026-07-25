@@ -1,0 +1,128 @@
+import { contextBridge, ipcRenderer } from "electron";
+import {
+  IPC_CHANNELS,
+  type CodexTaskProgressEvent,
+  type ImplementationProgressEvent,
+  type DiffenderApi,
+  type ReviewProgressEvent,
+} from "./shared/contracts";
+
+const api: DiffenderApi = {
+  projects: {
+    list: () => ipcRenderer.invoke(IPC_CHANNELS.projectsList),
+    add: () => ipcRenderer.invoke(IPC_CHANNELS.projectsAdd),
+    remove: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.projectsRemove, projectId),
+    refresh: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.projectsRefresh, projectId),
+  },
+  reviews: {
+    current: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reviewsCurrent, projectId),
+    run: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.reviewsRun, projectId),
+    cancel: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reviewsCancel, projectId),
+    approve: (projectId, reviewId, groupId, approved) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.reviewsApprove,
+        projectId,
+        reviewId,
+        groupId,
+        approved,
+      ),
+    saveFindingNote: (projectId, reviewId, findingId, note) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.reviewsFindingNote,
+        projectId,
+        reviewId,
+        findingId,
+        note,
+      ),
+    addFeedback: (projectId, reviewId, groupId, draft) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.reviewsFeedbackAdd,
+        projectId,
+        reviewId,
+        groupId,
+        draft,
+      ),
+    removeFeedback: (projectId, reviewId, groupId, feedbackId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.reviewsFeedbackRemove,
+        projectId,
+        reviewId,
+        groupId,
+        feedbackId,
+      ),
+    onProgress: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, event: ReviewProgressEvent) =>
+        listener(event);
+      ipcRenderer.on(IPC_CHANNELS.reviewsProgress, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.reviewsProgress, wrapped);
+    },
+  },
+  codex: {
+    status: () => ipcRenderer.invoke(IPC_CHANNELS.codexStatus),
+    tasks: (projectId, includeAll) =>
+      ipcRenderer.invoke(IPC_CHANNELS.codexTasks, projectId, includeAll),
+    createTask: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.codexTaskCreate, projectId),
+    linkTask: (projectId, threadId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.codexTaskLink, projectId, threadId),
+    unlinkTask: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.codexTaskUnlink, projectId),
+    copyFeedback: (projectId, reviewId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.codexFeedbackCopy,
+        projectId,
+        reviewId,
+      ),
+    sendFeedback: (projectId, reviewId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.codexFeedbackSend,
+        projectId,
+        reviewId,
+      ),
+    openTask: (threadId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.codexTaskOpen, threadId),
+    onTaskProgress: (listener) => {
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        event: CodexTaskProgressEvent,
+      ) => listener(event);
+      ipcRenderer.on(IPC_CHANNELS.codexTaskProgress, wrapped);
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.codexTaskProgress, wrapped);
+    },
+  },
+  implementations: {
+    detect: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.implementationsDetect, projectId),
+    select: (projectId, agent) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.implementationsSelect,
+        projectId,
+        agent,
+      ),
+    sendFeedback: (projectId, reviewId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.implementationsSend,
+        projectId,
+        reviewId,
+      ),
+    onProgress: (listener) => {
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        event: ImplementationProgressEvent,
+      ) => listener(event);
+      ipcRenderer.on(IPC_CHANNELS.implementationsProgress, wrapped);
+      return () =>
+        ipcRenderer.removeListener(
+          IPC_CHANNELS.implementationsProgress,
+          wrapped,
+        );
+    },
+  },
+};
+
+contextBridge.exposeInMainWorld("diffender", api);
