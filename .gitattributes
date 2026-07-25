@@ -1,0 +1,18 @@
+# 既定: テキストファイルは LF に正規化する
+* text=auto eol=lf
+
+# バイナリは変換しない
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.zip binary
+*.node binary
