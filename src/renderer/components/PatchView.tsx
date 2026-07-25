@@ -113,6 +113,7 @@ interface PatchViewProps {
   file: DiffFile;
   feedback: ReviewFeedback[];
   defaultOpen?: boolean;
+  readOnly?: boolean;
   onAddFeedback: (scope: ReviewFeedbackScope, body: string) => Promise<void>;
 }
 
@@ -129,11 +130,13 @@ export const FeedbackComposer = memo(function FeedbackComposer({
   onSubmit,
   onCancel,
   autoFocus = false,
+  disabled = false,
 }: {
   targetLabel: string;
   onSubmit: (body: string) => Promise<void>;
   onCancel?: () => void;
   autoFocus?: boolean;
+  disabled?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
@@ -145,7 +148,7 @@ export const FeedbackComposer = memo(function FeedbackComposer({
 
   const submit = useCallback(async () => {
     const value = body.trim();
-    if (!value || state === "saving") return;
+    if (disabled || !value || state === "saving") return;
     setState("saving");
     try {
       await onSubmit(value);
@@ -154,7 +157,7 @@ export const FeedbackComposer = memo(function FeedbackComposer({
     } catch {
       setState("error");
     }
-  }, [body, onSubmit, state]);
+  }, [body, disabled, onSubmit, state]);
 
   return (
     <div className="feedback-composer">
@@ -164,6 +167,7 @@ export const FeedbackComposer = memo(function FeedbackComposer({
       </div>
       <textarea
         autoFocus={autoFocus}
+        disabled={disabled}
         maxLength={4_000}
         onBlur={() => {
           if (!body.trim() && state !== "saving") onCancel?.();
@@ -197,7 +201,7 @@ export const FeedbackComposer = memo(function FeedbackComposer({
         ) : null}
         <button
           className="feedback-composer__submit"
-          disabled={!body.trim() || state === "saving"}
+          disabled={disabled || !body.trim() || state === "saving"}
           onClick={() => void submit()}
           type="button"
         >
@@ -244,6 +248,7 @@ export const PatchView = memo(function PatchView({
   file,
   feedback,
   defaultOpen = false,
+  readOnly = false,
   onAddFeedback,
 }: PatchViewProps) {
   const rows = useMemo(() => parsePatch(file.patch), [file.patch]);
@@ -251,6 +256,14 @@ export const PatchView = memo(function PatchView({
   const draggingRef = useRef(false);
   const fileName = file.path.split(/[\\/]/).pop() ?? file.path;
   const directory = file.path.slice(0, Math.max(0, file.path.length - fileName.length));
+
+  // 閲覧専用へ遷移したら、遷移前に作られた選択とインラインの入力欄を破棄する。
+  useEffect(() => {
+    if (readOnly) {
+      draggingRef.current = false;
+      setSelection(null);
+    }
+  }, [readOnly]);
 
   const finishDrag = useCallback(() => {
     if (!draggingRef.current) return;
@@ -313,22 +326,23 @@ export const PatchView = memo(function PatchView({
 
   const beginDrag = useCallback(
     (side: DiffSide, rowIndex: number, hunkId: number) => {
+      if (readOnly) return;
       draggingRef.current = true;
       setSelection({ side, hunkId, startIndex: rowIndex, endIndex: rowIndex, ready: false });
     },
-    [],
+    [readOnly],
   );
 
   const extendDrag = useCallback(
     (side: DiffSide, rowIndex: number, hunkId: number) => {
-      if (!draggingRef.current) return;
+      if (readOnly || !draggingRef.current) return;
       setSelection((current) =>
         current && current.side === side && current.hunkId === hunkId
           ? { ...current, endIndex: rowIndex }
           : current,
       );
     },
-    [],
+    [readOnly],
   );
 
   return (
@@ -389,7 +403,9 @@ export const PatchView = memo(function PatchView({
           tabIndex={0}
         >
           <div className="patch__review-guide">
-            行番号を押したままドラッグして、単一行または複数行へフィードバック
+            {readOnly
+              ? "新しい変更があるため、このレビューは閲覧のみです。再レビューしてください。"
+              : "行番号を押したままドラッグして、単一行または複数行へフィードバック"}
           </div>
           <div
             className="patch__table"
@@ -441,10 +457,11 @@ export const PatchView = memo(function PatchView({
                     ) : (
                       <button
                         aria-label={`変更前 ${row.oldLine} 行をフィードバック対象にする`}
-                        className={`patch__line-number patch__line-number--selectable${selection?.side === "old" && rowSelected ? " patch__line-number--selected" : ""}`}
+                        className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${selection?.side === "old" && rowSelected ? " patch__line-number--selected" : ""}`}
                         data-feedback-side="old"
                         data-hunk-id={row.hunkId}
                         data-row-index={rowIndex}
+                        disabled={readOnly}
                         onMouseDown={(event) => {
                           event.preventDefault();
                           beginDrag("old", rowIndex, row.hunkId);
@@ -461,10 +478,11 @@ export const PatchView = memo(function PatchView({
                     ) : (
                       <button
                         aria-label={`変更後 ${row.newLine} 行をフィードバック対象にする`}
-                        className={`patch__line-number patch__line-number--selectable${selection?.side === "new" && rowSelected ? " patch__line-number--selected" : ""}`}
+                        className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${selection?.side === "new" && rowSelected ? " patch__line-number--selected" : ""}`}
                         data-feedback-side="new"
                         data-hunk-id={row.hunkId}
                         data-row-index={rowIndex}
+                        disabled={readOnly}
                         onMouseDown={(event) => {
                           event.preventDefault();
                           beginDrag("new", rowIndex, row.hunkId);
@@ -494,12 +512,14 @@ export const PatchView = memo(function PatchView({
                       targetLabel={feedbackTargetLabel(item)}
                     />
                   ))}
-                  {selection?.ready &&
+                  {!readOnly &&
+                  selection?.ready &&
                   selectedRange &&
                   selectedRange.anchorIndex === rowIndex ? (
                     <div className="patch__inline-composer">
                       <FeedbackComposer
                         autoFocus
+                        disabled={readOnly}
                         onCancel={() => setSelection(null)}
                         onSubmit={async (body) => {
                           await onAddFeedback(selectedRange.scope, body);

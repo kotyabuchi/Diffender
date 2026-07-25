@@ -111,7 +111,11 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const snapshot = state.snapshots[projectId]?.[reviewCacheKey(diff.diffHash)];
+    const snapshot = pickCurrentSnapshot(
+      state.snapshots[projectId],
+      diff.diffHash,
+      diff.files.length > 0,
+    );
     return snapshot ? { ...snapshot, source: "cache" } : null;
   }
 
@@ -553,6 +557,28 @@ function buildPrompt(files: ReviewSnapshot["files"]): string {
     "",
     diff,
   ].join("\n");
+}
+
+/**
+ * 表示するレビューを選ぶ。現在の差分に完全一致するレビューを最優先で返す。
+ * 一致が無くても変更が残っている間は直近のレビューを返して「前回の結果」を
+ * 保持する（呼び出し側は project.reviewStatus === "stale" で古さを表示する）。
+ * 変更が無い場合は表示しない。
+ */
+export function pickCurrentSnapshot(
+  projectSnapshots: Record<string, ReviewSnapshot> | undefined,
+  currentDiffHash: string,
+  hasChanges: boolean,
+): ReviewSnapshot | null {
+  if (!projectSnapshots) return null;
+  const exact = projectSnapshots[reviewCacheKey(currentDiffHash)];
+  if (exact) return exact;
+  if (!hasChanges) return null;
+  return Object.values(projectSnapshots).reduce<ReviewSnapshot | null>(
+    (newest, candidate) =>
+      !newest || candidate.createdAt > newest.createdAt ? candidate : newest,
+    null,
+  );
 }
 
 export function reviewCacheKey(diffHash: string): string {

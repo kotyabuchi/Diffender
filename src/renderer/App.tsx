@@ -620,9 +620,11 @@ function ReviewToc({ groups }: { groups: ReviewGroup[] }) {
 function FindingNote({
   initialValue,
   onSave,
+  readOnly = false,
 }: {
   initialValue: string;
   onSave: (note: string) => Promise<void>;
+  readOnly?: boolean;
 }) {
   const [value, setValue] = useState(initialValue);
   const [savedValue, setSavedValue] = useState(initialValue);
@@ -663,6 +665,7 @@ function FindingNote({
         </span>
       </div>
       <textarea
+        disabled={readOnly}
         maxLength={4_000}
         onBlur={() => void save()}
         onChange={(event) => {
@@ -681,7 +684,7 @@ function FindingNote({
       />
       <button
         className="finding-note__save"
-        disabled={value === savedValue || saveState === "saving"}
+        disabled={readOnly || value === savedValue || saveState === "saving"}
         onClick={() => void save()}
         type="button"
       >
@@ -689,6 +692,17 @@ function FindingNote({
       </button>
     </div>
   );
+}
+
+function composeSuggestionFeedbackBody(finding: {
+  reason: string;
+  suggestion: string;
+}): string {
+  const reason = finding.reason.trim();
+  const suggestion = finding.suggestion.trim();
+  if (!reason) return suggestion;
+  if (!suggestion) return reason;
+  return `${reason}\n提案: ${suggestion}`;
 }
 
 function feedbackScopesMatch(
@@ -709,10 +723,12 @@ function SuggestionFeedbackButton({
   feedbackId,
   onAdd,
   onRemove,
+  disabled = false,
 }: {
   feedbackId?: string;
   onAdd: () => Promise<void>;
   onRemove: (feedbackId: string) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const [showRemoveIntent, setShowRemoveIntent] = useState(false);
@@ -754,7 +770,7 @@ function SuggestionFeedbackButton({
         className={`suggestion-feedback__button ${
           added ? "suggestion-feedback__button--added" : ""
         }`}
-        disabled={state === "saving"}
+        disabled={disabled || state === "saving"}
         onBlur={() => setShowRemoveIntent(false)}
         onClick={() => void toggleSuggestion()}
         onFocus={() => setShowRemoveIntent(true)}
@@ -786,6 +802,7 @@ function ReviewGroupSection({
   index,
   snapshot,
   approvalPending,
+  readOnly,
   sectionId,
   onApprove,
   onSaveFindingNote,
@@ -796,6 +813,7 @@ function ReviewGroupSection({
   index: number;
   snapshot: ReviewSnapshot;
   approvalPending: boolean;
+  readOnly: boolean;
   sectionId: string;
   onApprove: (group: ReviewGroup) => void;
   onSaveFindingNote: (findingId: string, note: string) => Promise<void>;
@@ -861,7 +879,7 @@ function ReviewGroupSection({
         <button
           aria-pressed={group.approved}
           className={`approval-button ${group.approved ? "approval-button--approved" : ""}`}
-          disabled={approvalPending}
+          disabled={approvalPending || readOnly}
           onClick={() => onApprove(group)}
           type="button"
         >
@@ -895,9 +913,10 @@ function ReviewGroupSection({
                     endLine: finding.line,
                   }
                 : { type: "group" };
+            const suggestionBody = composeSuggestionFeedbackBody(finding);
             const suggestionFeedback = (group.feedback ?? []).find(
               (feedback) =>
-                feedback.body === finding.suggestion &&
+                feedback.body === suggestionBody &&
                 feedbackScopesMatch(feedback.scope, feedbackScope),
             );
 
@@ -916,9 +935,10 @@ function ReviewGroupSection({
                   <div className="finding__suggestion-header">
                     <span>提案</span>
                     <SuggestionFeedbackButton
+                      disabled={readOnly}
                       feedbackId={suggestionFeedback?.id}
                       onAdd={() =>
-                        addGroupFeedback(feedbackScope, finding.suggestion)
+                        addGroupFeedback(feedbackScope, suggestionBody)
                       }
                       onRemove={(feedbackId) =>
                         onRemoveFeedback(group.id, feedbackId)
@@ -930,6 +950,7 @@ function ReviewGroupSection({
                 <FindingNote
                   initialValue={finding.reviewerNote ?? ""}
                   onSave={(note) => onSaveFindingNote(finding.id, note)}
+                  readOnly={readOnly}
                 />
               </article>
             );
@@ -950,10 +971,18 @@ function ReviewGroupSection({
         {groupFeedback.map((item) => (
           <FeedbackCard feedback={item} key={item.id} targetLabel="目的全体" />
         ))}
-        <FeedbackComposer
-          onSubmit={addWholeGroupFeedback}
-          targetLabel="この目的全体"
-        />
+        {readOnly ? (
+          groupFeedback.length === 0 ? (
+            <p className="muted-message">
+              新しい変更があるため、フィードバックの追加は一時停止中です。再レビューしてください。
+            </p>
+          ) : null
+        ) : (
+          <FeedbackComposer
+            onSubmit={addWholeGroupFeedback}
+            targetLabel="この目的全体"
+          />
+        )}
       </section>
 
       <section className="file-changes" aria-label={`${group.title} のファイル差分`}>
@@ -973,6 +1002,7 @@ function ReviewGroupSection({
               file={file}
               key={file.path}
               onAddFeedback={addGroupFeedback}
+              readOnly={readOnly}
             />
           );
         })}
@@ -987,12 +1017,14 @@ function ReviewGroupSection({
 function CodexHandoff({
   project,
   snapshot,
+  stale,
   taskProgress,
   onProjectUpdated,
   onError,
 }: {
   project: ProjectRecord;
   snapshot: ReviewSnapshot;
+  stale: boolean;
   taskProgress?: ImplementationProgressEvent;
   onProjectUpdated: (project: ProjectRecord) => void;
   onError: (title: string, error: unknown) => void;
@@ -1145,6 +1177,7 @@ function CodexHandoff({
   }, [onError, onProjectUpdated, project.id]);
 
   const copyFeedback = useCallback(async () => {
+    if (stale) return;
     setBusy("copy");
     try {
       await window.diffender.codex.copyFeedback(project.id, snapshot.id);
@@ -1154,9 +1187,10 @@ function CodexHandoff({
     } finally {
       setBusy(null);
     }
-  }, [onError, project.id, snapshot.id]);
+  }, [onError, project.id, snapshot.id, stale]);
 
   const sendFeedback = useCallback(async () => {
+    if (stale) return;
     const agent = detection?.selected;
     if (!agent) return;
     const destination =
@@ -1182,7 +1216,7 @@ function CodexHandoff({
     } finally {
       setBusy(null);
     }
-  }, [detection?.selected, onError, project.id, snapshot.id]);
+  }, [detection?.selected, onError, project.id, snapshot.id, stale]);
 
   const linked = project.codexThreadId
     ? tasks.find((task) => task.id === project.codexThreadId)
@@ -1411,10 +1445,17 @@ function CodexHandoff({
         </p>
       )}
 
+      {stale ? (
+        <div className="codex-handoff__stale" role="status">
+          <strong>新しい変更があります。</strong>
+          このレビューの後に差分が更新されています。再レビューしてから、コピー・送信してください。
+        </div>
+      ) : null}
+
       <div className="codex-handoff__actions">
         <button
           className="secondary-button"
-          disabled={busy !== null}
+          disabled={stale || busy !== null}
           onClick={() => void copyFeedback()}
           type="button"
         >
@@ -1422,7 +1463,9 @@ function CodexHandoff({
         </button>
         <button
           className="primary-button"
-          disabled={!agentAvailable || busy !== null || implementationRunning}
+          disabled={
+            stale || !agentAvailable || busy !== null || implementationRunning
+          }
           onClick={() => void sendFeedback()}
           type="button"
         >
@@ -1494,7 +1537,6 @@ function ReviewReport({
       <div className="review-document">
       {stale ? (
         <div className="stale-banner">
-          <span>変更あり</span>
           このレビューの後に差分が更新されています。再レビューで最新状態を確認してください。
         </div>
       ) : null}
@@ -1560,6 +1602,7 @@ function ReviewReport({
             onApprove={onApprove}
             onRemoveFeedback={onRemoveFeedback}
             onSaveFindingNote={onSaveFindingNote}
+            readOnly={stale}
             sectionId={`review-group-${index + 1}`}
             snapshot={snapshot}
           />
@@ -2116,6 +2159,7 @@ export function App() {
                     onProjectUpdated={updateProject}
                     project={selectedProject}
                     snapshot={snapshot}
+                    stale={selectedProject.reviewStatus === "stale"}
                     taskProgress={taskProgressByProject[selectedProject.id]}
                   />
                 ) : null}
