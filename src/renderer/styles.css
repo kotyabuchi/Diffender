@@ -1456,9 +1456,15 @@ button:disabled {
 }
 
 .review-group__header {
+  position: sticky;
+  top: 78px;
+  z-index: 7;
   display: grid;
   align-items: start;
-  gap: 12px;
+  gap: 12px 12px;
+  padding: 12px 0;
+  background: var(--paper);
+  box-shadow: 0 1px 0 var(--line);
   grid-template-columns: 34px minmax(0, 1fr) auto;
 }
 
@@ -1532,7 +1538,6 @@ button:disabled {
 }
 
 .review-group__title > p {
-  max-width: 760px;
   margin: 0;
   color: var(--ink-soft);
   font-size: 14px;
@@ -2772,7 +2777,9 @@ button:disabled {
   }
 
   .review-group__header {
+    position: static;
     display: block;
+    box-shadow: none;
   }
 
   .review-group__ordinal {
@@ -2828,5 +2835,22 @@ button:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* ローディング表示は「実行中」を伝える機能的インジケーター。
+     回転は避けて穏やかな明滅にする。 */
+
+  /* CSSで描くリング型スピナーは、そのまま点滅させると壊れて見えるため
+     塗りつぶしのドットへ変えてから明滅させる。 */
+  .progress-panel__spinner {
+    border-color: transparent !important;
+    background: var(--accent) !important;
+    animation: pulse 1.4s ease-in-out infinite !important;
+  }
+
+  /* アイコンを回転させるラッパーやスケルトンは、形はそのままで明滅のみ。 */
+  .is-spinning,
+  .skeleton {
+    animation: pulse 1.4s ease-in-out infinite !important;
   }
 }
