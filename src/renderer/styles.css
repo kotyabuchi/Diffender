@@ -756,14 +756,6 @@ button:disabled {
   font-weight: 600;
 }
 
-.stale-banner span {
-  border: 1px solid currentColor;
-  padding: 2px 5px;
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-}
-
 .workspace,
 .progress-panel,
 .quiet-state {
@@ -1102,6 +1094,23 @@ button:disabled {
 
 .text-button--danger {
   color: var(--critical);
+}
+
+.codex-handoff__stale {
+  margin-top: 12px;
+  border: 1px solid #d0b27b;
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: #6a521e;
+  background: var(--medium-light);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.codex-handoff__stale strong {
+  display: block;
+  font-size: 12px;
 }
 
 .codex-handoff__actions {
@@ -1549,7 +1558,10 @@ button:disabled {
 }
 
 .approval-button:disabled {
+  border-color: var(--line);
   color: var(--ink-faint);
+  background: var(--paper-deep);
+  cursor: not-allowed;
 }
 
 .approval-button--approved {
@@ -1721,8 +1733,9 @@ button:disabled {
 }
 
 .suggestion-feedback__button:disabled {
-  cursor: default;
-  opacity: 0.68;
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.55;
 }
 
 .suggestion-feedback__button--added {
@@ -1793,6 +1806,14 @@ button:disabled {
   outline-offset: 1px;
 }
 
+.finding-note textarea:disabled,
+.feedback-composer textarea:disabled {
+  border-color: var(--line);
+  color: var(--ink-faint);
+  background: var(--paper-deep);
+  cursor: not-allowed;
+}
+
 .finding-note__save {
   position: absolute;
   right: 8px;
@@ -1809,8 +1830,10 @@ button:disabled {
 }
 
 .finding-note__save:disabled {
+  border-color: var(--line);
   color: var(--ink-faint);
-  cursor: default;
+  background: var(--paper-deep);
+  cursor: not-allowed;
 }
 
 .group-feedback {
@@ -1947,9 +1970,10 @@ button:disabled {
 }
 
 .feedback-composer__submit:disabled {
-  border-color: var(--line-strong);
+  border-color: var(--line);
   color: var(--ink-faint);
   background: var(--paper-deep);
+  cursor: not-allowed;
 }
 
 .patch__fallback .feedback-card {
@@ -2124,6 +2148,11 @@ button:disabled {
   line-height: 16px;
   text-align: right;
   user-select: none;
+}
+
+.patch__line-number:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
 }
 
 .patch__line-number--selectable {
