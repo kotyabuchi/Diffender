@@ -1,0 +1,4 @@
+# サプライチェーン対策の設定（pnpm 10.16+ / 10.21+）。
+# node-linker と onlyBuiltDependencies は従来どおり .npmrc / package.json 側で管理する。
+minimumReleaseAge: 1440 # 分（=1日）。公開直後の新バージョンは即インストールしない
+trustPolicy: no-downgrade # 署名/provenance の信頼度が下がった版では install を失敗させる
