@@ -697,6 +697,34 @@ button:disabled {
   font-size: 12px;
 }
 
+.review-settings {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.review-settings__field {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.review-settings__field select {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.review-settings__field select:hover {
+  border-color: var(--ink-soft);
+}
+
 .error-notice {
   position: relative;
   display: grid;

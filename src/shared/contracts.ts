@@ -1,4 +1,17 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type ReviewEffort = "low" | "medium" | "high" | "xhigh";
+
+export interface ReviewModel {
+  id: string;
+  displayName: string;
+  description: string;
+  efforts: ReviewEffort[];
+}
+
+export interface ReviewRunOptions {
+  model?: string;
+  effort?: ReviewEffort;
+}
 export type ReviewStatus =
   | "idle"
   | "stale"
@@ -89,6 +102,8 @@ export interface ReviewSnapshot {
   additions: number;
   deletions: number;
   source: "cache" | "codex";
+  model?: string | null;
+  effort?: ReviewEffort | null;
 }
 
 export interface CodexStatus {
@@ -167,7 +182,8 @@ export interface DiffenderApi {
   };
   reviews: {
     current(projectId: string): Promise<ReviewSnapshot | null>;
-    run(projectId: string): Promise<ReviewSnapshot>;
+    run(projectId: string, options?: ReviewRunOptions): Promise<ReviewSnapshot>;
+    models(): Promise<ReviewModel[]>;
     cancel(projectId: string): Promise<void>;
     approve(
       projectId: string,
@@ -234,6 +250,7 @@ export const IPC_CHANNELS = {
   projectsRefresh: "projects:refresh",
   reviewsCurrent: "reviews:current",
   reviewsRun: "reviews:run",
+  reviewsModels: "reviews:models",
   reviewsCancel: "reviews:cancel",
   reviewsApprove: "reviews:approve",
   reviewsFindingNote: "reviews:finding-note",

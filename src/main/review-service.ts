@@ -6,6 +6,7 @@ import type {
   ReviewFeedbackScope,
   ReviewGroup,
   ReviewProgressEvent,
+  ReviewRunOptions,
   ReviewSnapshot,
 } from "../shared/contracts";
 import { CodexRunner } from "./codex";
@@ -90,7 +91,13 @@ export class ReviewService {
           const refreshed = await refreshProject(project);
           if (!refreshed.hasChanges) return refreshed;
           const diff = await collectRepositoryDiff(refreshed.rootPath);
-          const cached = state.snapshots[refreshed.id]?.[reviewCacheKey(diff.diffHash)];
+          const cached = Object.values(state.snapshots[refreshed.id] ?? {})
+            .filter((snapshot) => snapshot.diffHash === diff.diffHash)
+            .reduce<ReviewSnapshot | null>(
+              (newest, snapshot) =>
+                !newest || snapshot.createdAt > newest.createdAt ? snapshot : newest,
+              null,
+            );
           return cached
             ? {
                 ...refreshed,
@@ -119,7 +126,10 @@ export class ReviewService {
     return snapshot ? { ...snapshot, source: "cache" } : null;
   }
 
-  async runReview(projectId: string): Promise<ReviewSnapshot> {
+  async runReview(
+    projectId: string,
+    options: ReviewRunOptions = {},
+  ): Promise<ReviewSnapshot> {
     let state = await this.store.read();
     const project = requireProject(state, projectId);
     this.progress({ projectId, stage: "queued", message: "レビューを準備しています。" });
@@ -128,7 +138,7 @@ export class ReviewService {
     try {
       this.progress({ projectId, stage: "reading", message: "ローカルの変更を読み取っています。" });
       const diff = await collectRepositoryDiff(project.rootPath);
-      const cached = state.snapshots[projectId]?.[reviewCacheKey(diff.diffHash)];
+      const cached = state.snapshots[projectId]?.[reviewCacheKey(diff.diffHash, options)];
       if (cached) {
         await this.setReviewStatus(projectId, "complete", cached.createdAt);
         this.progress({ projectId, stage: "complete", message: "保存済みレビューを表示します。" });
@@ -164,6 +174,7 @@ export class ReviewService {
         project.rootPath,
         this.schemaPath,
         buildPrompt(diff.files),
+        options,
       );
       const currentDiff = await collectRepositoryDiff(project.rootPath);
       if (currentDiff.diffHash !== diff.diffHash) {
@@ -180,7 +191,7 @@ export class ReviewService {
           fingerprint,
         };
       });
-      const snapshot = createSnapshot(projectId, diff, result.summary, groups);
+      const snapshot = createSnapshot(projectId, diff, result.summary, groups, options);
       await this.saveSnapshot(snapshot);
       this.progress({ projectId, stage: "complete", message: "レビューが完了しました。" });
       return snapshot;
@@ -208,11 +219,11 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const cacheKey = reviewCacheKey(diff.diffHash);
-    const snapshot = state.snapshots[projectId]?.[cacheKey];
-    if (!snapshot || snapshot.id !== reviewId) {
+    const entry = findSnapshotEntry(state.snapshots[projectId], reviewId);
+    if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
       throw new Error("レビューが古くなっています。再レビューしてから承認してください。");
     }
+    const { key: cacheKey, snapshot } = entry;
     const group = snapshot.groups.find((candidate) => candidate.id === groupId);
     if (!group) throw new Error("対象の変更グループが見つかりません。");
     const expectedFingerprint = groupFingerprint(diff.diffHash, group);
@@ -248,14 +259,14 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const cacheKey = reviewCacheKey(diff.diffHash);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
     await this.store.update((latest) => {
-      const snapshot = latest.snapshots[projectId]?.[cacheKey];
-      if (!snapshot || snapshot.id !== reviewId) {
+      const entry = findSnapshotEntry(latest.snapshots[projectId], reviewId);
+      if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
         throw new Error("レビューが古くなっています。再レビューしてからメモを保存してください。");
       }
+      const { key: cacheKey, snapshot } = entry;
       let found = false;
       const groups = snapshot.groups.map((group) => ({
         ...group,
@@ -298,16 +309,16 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const cacheKey = reviewCacheKey(diff.diffHash);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
     await this.store.update((latest) => {
-      const snapshot = latest.snapshots[projectId]?.[cacheKey];
-      if (!snapshot || snapshot.id !== reviewId) {
+      const entry = findSnapshotEntry(latest.snapshots[projectId], reviewId);
+      if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
         throw new Error(
           "レビューが古くなっています。再レビューしてからフィードバックを保存してください。",
         );
       }
+      const { key: cacheKey, snapshot } = entry;
       const target = snapshot.groups.find((group) => group.id === groupId);
       if (!target) throw new Error("対象の変更グループが見つかりません。");
 
@@ -365,16 +376,16 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const cacheKey = reviewCacheKey(diff.diffHash);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
     await this.store.update((latest) => {
-      const snapshot = latest.snapshots[projectId]?.[cacheKey];
-      if (!snapshot || snapshot.id !== reviewId) {
+      const entry = findSnapshotEntry(latest.snapshots[projectId], reviewId);
+      if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
         throw new Error(
           "レビューが古くなっています。再レビューしてからフィードバックを解除してください。",
         );
       }
+      const { key: cacheKey, snapshot } = entry;
       const target = snapshot.groups.find((group) => group.id === groupId);
       if (!target) throw new Error("対象の変更グループが見つかりません。");
       if (!(target.feedback ?? []).some((item) => item.id === feedbackId)) {
@@ -476,7 +487,7 @@ export class ReviewService {
         ...state.snapshots,
         [snapshot.projectId]: {
           ...state.snapshots[snapshot.projectId],
-          [reviewCacheKey(snapshot.diffHash)]: snapshot,
+          [reviewCacheKey(snapshot.diffHash, snapshotRunOptions(snapshot))]: snapshot,
         },
       },
     }));
@@ -508,14 +519,13 @@ export class ReviewService {
     const state = await this.store.read();
     const project = requireProject(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const snapshot =
-      state.snapshots[projectId]?.[reviewCacheKey(diff.diffHash)];
-    if (!snapshot || snapshot.id !== reviewId) {
+    const entry = findSnapshotEntry(state.snapshots[projectId], reviewId);
+    if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
       throw new Error(
         "レビューが古くなっています。再レビューしてからフィードバックを送ってください。",
       );
     }
-    return { project, snapshot };
+    return { project, snapshot: entry.snapshot };
   }
 }
 
@@ -530,6 +540,7 @@ function createSnapshot(
   diff: Awaited<ReturnType<typeof collectRepositoryDiff>>,
   summary: string,
   groups: ReviewGroup[],
+  options: ReviewRunOptions = {},
 ): ReviewSnapshot {
   return {
     id: randomUUID(),
@@ -542,6 +553,8 @@ function createSnapshot(
     additions: diff.additions,
     deletions: diff.deletions,
     source: "codex",
+    model: options.model?.trim() || null,
+    effort: options.effort ?? null,
   };
 }
 
@@ -571,18 +584,53 @@ export function pickCurrentSnapshot(
   hasChanges: boolean,
 ): ReviewSnapshot | null {
   if (!projectSnapshots) return null;
-  const exact = projectSnapshots[reviewCacheKey(currentDiffHash)];
+  const newest = (
+    left: ReviewSnapshot | null,
+    right: ReviewSnapshot,
+  ): ReviewSnapshot => (!left || right.createdAt > left.createdAt ? right : left);
+  const entries = Object.values(projectSnapshots);
+  const exact = entries
+    .filter((candidate) => candidate.diffHash === currentDiffHash)
+    .reduce<ReviewSnapshot | null>(newest, null);
   if (exact) return exact;
   if (!hasChanges) return null;
-  return Object.values(projectSnapshots).reduce<ReviewSnapshot | null>(
-    (newest, candidate) =>
-      !newest || candidate.createdAt > newest.createdAt ? candidate : newest,
-    null,
-  );
+  return entries.reduce<ReviewSnapshot | null>(newest, null);
 }
 
-export function reviewCacheKey(diffHash: string): string {
-  return `${REVIEW_CACHE_VERSION}:${diffHash}`;
+/**
+ * cache key は review contract version と diffHash を組み合わせる。既定設定
+ * （model / effort 未指定）ではキーを従来どおりに保ち既存 cache を維持する。
+ * 非既定設定のみ suffix を付けて別エントリにし、同じ差分でも設定違いを衝突させない。
+ */
+export function reviewCacheKey(diffHash: string, options?: ReviewRunOptions): string {
+  const model = options?.model?.trim();
+  const effort = options?.effort;
+  const suffix = model || effort ? `:${model ?? "default"}:${effort ?? "default"}` : "";
+  return `${REVIEW_CACHE_VERSION}:${diffHash}${suffix}`;
+}
+
+function snapshotRunOptions(snapshot: ReviewSnapshot): ReviewRunOptions | undefined {
+  if (!snapshot.model && !snapshot.effort) return undefined;
+  return {
+    model: snapshot.model ?? undefined,
+    effort: snapshot.effort ?? undefined,
+  };
+}
+
+/**
+ * reviewId で該当 snapshot と、それが格納されている cache key を探す。設定違いで
+ * 同じ diff に複数エントリが存在し得るため、diffHash からキーを引くのではなく
+ * reviewId で走査する。呼び出し側で snapshot.diffHash と現在の差分の一致を検証する。
+ */
+function findSnapshotEntry(
+  projectSnapshots: Record<string, ReviewSnapshot> | undefined,
+  reviewId: string,
+): { key: string; snapshot: ReviewSnapshot } | null {
+  if (!projectSnapshots) return null;
+  for (const [key, snapshot] of Object.entries(projectSnapshots)) {
+    if (snapshot.id === reviewId) return { key, snapshot };
+  }
+  return null;
 }
 
 export function buildImplementationFeedback(

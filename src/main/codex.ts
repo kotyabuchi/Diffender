@@ -5,8 +5,11 @@ import type {
   CodexStatus,
   ReviewFinding,
   ReviewGroup,
+  ReviewRunOptions,
   RiskLevel,
 } from "../shared/contracts";
+
+const DEFAULT_REVIEW_MODEL = "gpt-5.6-terra";
 
 const STATUS_TIMEOUT_MS = 15_000;
 const REVIEW_TIMEOUT_MS = 10 * 60_000;
@@ -89,6 +92,7 @@ export class CodexRunner {
     cwd: string,
     schemaPath: string,
     prompt: string,
+    options: ReviewRunOptions = {},
   ): Promise<CodexReviewResult> {
     if (this.running.has(projectId)) {
       throw new Error("このプロジェクトでは既にレビューを実行しています。");
@@ -98,7 +102,7 @@ export class CodexRunner {
       invocation.command,
       [
         ...invocation.prefixArgs,
-        ...buildCodexExecArgs(schemaPath),
+        ...buildCodexExecArgs(schemaPath, options),
       ],
       {
         cwd,
@@ -131,11 +135,16 @@ export class CodexRunner {
   }
 }
 
-export function buildCodexExecArgs(schemaPath: string): string[] {
+export function buildCodexExecArgs(
+  schemaPath: string,
+  options: ReviewRunOptions = {},
+): string[] {
+  const model = options.model?.trim() || DEFAULT_REVIEW_MODEL;
   return [
     "exec",
     "--model",
-    "gpt-5.6-terra",
+    model,
+    ...(options.effort ? ["-c", `model_reasoning_effort=${options.effort}`] : []),
     "--ephemeral",
     "--ignore-user-config",
     "--sandbox",

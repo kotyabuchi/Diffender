@@ -19,7 +19,9 @@ const api: DiffenderApi = {
   reviews: {
     current: (projectId) =>
       ipcRenderer.invoke(IPC_CHANNELS.reviewsCurrent, projectId),
-    run: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.reviewsRun, projectId),
+    run: (projectId, options) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reviewsRun, projectId, options),
+    models: () => ipcRenderer.invoke(IPC_CHANNELS.reviewsModels),
     cancel: (projectId) =>
       ipcRenderer.invoke(IPC_CHANNELS.reviewsCancel, projectId),
     approve: (projectId, reviewId, groupId, approved) =>

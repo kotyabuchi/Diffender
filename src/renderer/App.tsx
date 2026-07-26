@@ -13,9 +13,12 @@ import type {
   ImplementationAgentDetection,
   ImplementationProgressEvent,
   ProjectRecord,
+  ReviewEffort,
   ReviewFeedbackScope,
   ReviewGroup,
+  ReviewModel,
   ReviewProgressEvent,
+  ReviewRunOptions,
   ReviewSnapshot,
   RiskLevel,
 } from "../shared/contracts";
@@ -51,6 +54,13 @@ const RISK_LABELS: Record<RiskLevel, string> = {
   medium: "中",
   high: "高",
   critical: "重大",
+};
+
+const EFFORT_LABELS: Record<ReviewEffort, string> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "最高",
 };
 
 const REVIEW_STATUS_LABELS: Record<ProjectRecord["reviewStatus"], string> = {
@@ -1629,6 +1639,9 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [models, setModels] = useState<ReviewModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffort] = useState<ReviewEffort | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -1658,6 +1671,15 @@ export function App() {
     codexStatus?.installed &&
       codexStatus.authenticated &&
       codexStatus.authMethod === "chatgpt",
+  );
+  const effortOptions = (["low", "medium", "high", "xhigh"] as ReviewEffort[]).filter(
+    (effort) =>
+      !selectedModelId ||
+      Boolean(
+        models
+          .find((model) => model.id === selectedModelId)
+          ?.efforts.includes(effort),
+      ),
   );
 
   const showError = useCallback(
@@ -1724,6 +1746,23 @@ export function App() {
       active = false;
     };
   }, [showError]);
+
+  useEffect(() => {
+    if (!canReview || models.length > 0) return;
+    let active = true;
+    // モデル一覧は任意機能。取得できなくてもレビューは既定モデルで実行できる。
+    window.diffender.reviews
+      .models()
+      .then((list) => {
+        if (active) setModels(list);
+      })
+      .catch(() => {
+        /* セレクタを出さないだけ。既定モデルでのレビューは可能。 */
+      });
+    return () => {
+      active = false;
+    };
+  }, [canReview, models.length]);
 
   useEffect(() => {
     return window.diffender.reviews.onProgress((event) => {
@@ -1858,7 +1897,14 @@ export function App() {
     );
 
     try {
-      const review = await window.diffender.reviews.run(projectId);
+      const options: ReviewRunOptions | undefined =
+        selectedModelId || selectedEffort
+          ? {
+              model: selectedModelId ?? undefined,
+              effort: selectedEffort ?? undefined,
+            }
+          : undefined;
+      const review = await window.diffender.reviews.run(projectId, options);
       if (selectedProjectIdRef.current === projectId) setSnapshot(review);
       setProjects((previous) =>
         previous.map((project) =>
@@ -1889,7 +1935,7 @@ export function App() {
     } finally {
       setBusyProjectIds((previous) => replaceSetValue(previous, projectId, false));
     }
-  }, [selectedProject, showError]);
+  }, [selectedEffort, selectedModelId, selectedProject, showError]);
 
   const cancelReview = useCallback(async () => {
     if (!selectedProject) return;
@@ -2109,6 +2155,58 @@ export function App() {
                       最終レビュー
                       <b>{formatDate(selectedProject.lastReviewedAt)}</b>
                     </span>
+                    {!isReviewing && canReview && models.length > 0 ? (
+                      <div
+                        className="review-settings"
+                        title="モデルや推論強度を変えると、キャッシュを使わず新しくレビューします（利用枠を多めに消費します）。トークン削減には効かず、下げると品質が落ちることがあります。"
+                      >
+                        <label className="review-settings__field">
+                          <span>モデル</span>
+                          <select
+                            value={selectedModelId ?? ""}
+                            onChange={(event) => {
+                              const id = event.target.value || null;
+                              setSelectedModelId(id);
+                              if (id) {
+                                const model = models.find((item) => item.id === id);
+                                if (
+                                  model &&
+                                  selectedEffort &&
+                                  !model.efforts.includes(selectedEffort)
+                                ) {
+                                  setSelectedEffort(null);
+                                }
+                              }
+                            }}
+                          >
+                            <option value="">既定</option>
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="review-settings__field">
+                          <span>推論強度</span>
+                          <select
+                            value={selectedEffort ?? ""}
+                            onChange={(event) =>
+                              setSelectedEffort(
+                                (event.target.value || null) as ReviewEffort | null,
+                              )
+                            }
+                          >
+                            <option value="">既定</option>
+                            {effortOptions.map((effort) => (
+                              <option key={effort} value={effort}>
+                                {EFFORT_LABELS[effort]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ) : null}
                     {isReviewing ? (
                       <button
                         className="secondary-button"

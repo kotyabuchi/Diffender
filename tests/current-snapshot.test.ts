@@ -40,4 +40,31 @@ describe("pickCurrentSnapshot", () => {
   it("returns null when the project has no stored reviews", () => {
     expect(pickCurrentSnapshot(undefined, "hash-a", true)).toBeNull();
   });
+
+  it("prefers the newest entry that matches the current diff across settings", () => {
+    const base = snapshot("base", "hash-a", "2026-07-24T00:00:00.000Z");
+    const xhigh = snapshot("xhigh", "hash-a", "2026-07-26T00:00:00.000Z");
+    const multi: Record<string, ReviewSnapshot> = {
+      [reviewCacheKey("hash-a")]: base,
+      [reviewCacheKey("hash-a", { model: "gpt-5.6-sol", effort: "xhigh" })]: xhigh,
+    };
+    expect(pickCurrentSnapshot(multi, "hash-a", true)?.id).toBe("xhigh");
+  });
+});
+
+describe("reviewCacheKey", () => {
+  it("keeps the default key stable so existing caches survive", () => {
+    expect(reviewCacheKey("hash-a")).toBe(reviewCacheKey("hash-a", {}));
+    expect(reviewCacheKey("hash-a", { model: undefined, effort: undefined })).toBe(
+      reviewCacheKey("hash-a"),
+    );
+  });
+
+  it("separates entries by model and effort", () => {
+    const base = reviewCacheKey("hash-a");
+    const tuned = reviewCacheKey("hash-a", { model: "gpt-5.6-sol", effort: "xhigh" });
+    expect(tuned).not.toBe(base);
+    expect(reviewCacheKey("hash-a", { effort: "high" })).not.toBe(base);
+    expect(reviewCacheKey("hash-a", { effort: "high" })).not.toBe(tuned);
+  });
 });

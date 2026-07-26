@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTurnStartParams,
+  mapReviewModels,
   toThreadSummary,
 } from "../src/main/codex-app-server";
 
@@ -27,6 +28,48 @@ describe("Codex App Server parameters", () => {
         excludeSlashTmp: false,
       },
     });
+  });
+
+  it("offers only exec-safe reasoning efforts and hides hidden models", () => {
+    expect(
+      mapReviewModels([
+        {
+          id: "gpt-5.6-terra",
+          displayName: "GPT-5.6-Terra",
+          description: "現行",
+          hidden: false,
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low" },
+            { reasoningEffort: "medium" },
+            { reasoningEffort: "high" },
+            { reasoningEffort: "xhigh" },
+            { reasoningEffort: "max" },
+            { reasoningEffort: "ultra" },
+          ],
+        },
+        {
+          id: "gpt-secret",
+          displayName: "Hidden",
+          description: "",
+          hidden: true,
+          supportedReasoningEfforts: [{ reasoningEffort: "low" }],
+        },
+        {
+          id: "gpt-no-effort",
+          displayName: "None",
+          description: "",
+          hidden: false,
+          supportedReasoningEfforts: [{ reasoningEffort: "max" }],
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "gpt-5.6-terra",
+        displayName: "GPT-5.6-Terra",
+        description: "現行",
+        efforts: ["low", "medium", "high", "xhigh"],
+      },
+    ]);
   });
 
   it("maps thread metadata into a compact renderer contract", () => {

@@ -6,6 +6,8 @@ import type {
   CodexThreadStatus,
   CodexThreadSummary,
   ProjectRecord,
+  ReviewEffort,
+  ReviewModel,
 } from "../shared/contracts";
 import { resolveCodexInvocation, sanitizedEnvironment } from "./codex";
 
@@ -49,6 +51,40 @@ interface ThreadListResponse {
 
 interface TurnStartResponse {
   turn: { id: string };
+}
+
+export interface AppServerModel {
+  id: string;
+  model?: string;
+  displayName?: string | null;
+  description?: string | null;
+  hidden?: boolean;
+  supportedReasoningEfforts?: Array<{ reasoningEffort: string }>;
+}
+
+interface ModelListResponse {
+  data: AppServerModel[];
+}
+
+// `model/list` はクライアント側カタログで `max` / `ultra` 等も含むが、exec エンドポイント
+// はモデルによってこれらを拒否し得る（例: terra の実サポートは none/low/medium/high/xhigh）。
+// 両者で確実に通る値に限定して提示し、実行時の失敗を避ける。
+const OFFERED_EFFORTS: ReviewEffort[] = ["low", "medium", "high", "xhigh"];
+
+export function mapReviewModels(data: AppServerModel[]): ReviewModel[] {
+  return data
+    .filter((model) => model.hidden !== true && typeof model.id === "string")
+    .map((model) => ({
+      id: model.id,
+      displayName: model.displayName?.trim() || model.id,
+      description: model.description?.trim() ?? "",
+      efforts: OFFERED_EFFORTS.filter((effort) =>
+        (model.supportedReasoningEfforts ?? []).some(
+          (entry) => entry.reasoningEffort === effort,
+        ),
+      ),
+    }))
+    .filter((model) => model.efforts.length > 0);
 }
 
 export function buildTurnStartParams(
@@ -120,6 +156,11 @@ export class CodexAppServer {
     return response.data
       .filter((thread) => !thread.ephemeral && thread.parentThreadId === null)
       .map(toThreadSummary);
+  }
+
+  async listModels(): Promise<ReviewModel[]> {
+    const response = await this.request<ModelListResponse>("model/list", {});
+    return mapReviewModels(response.data ?? []);
   }
 
   async readThread(threadId: string): Promise<CodexThreadSummary> {

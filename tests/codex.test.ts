@@ -107,4 +107,45 @@ describe("buildCodexExecArgs", () => {
       "-",
     ]);
   });
+
+  it("applies an explicit model and reasoning effort when provided", () => {
+    expect(
+      buildCodexExecArgs(String.raw`C:\schemas\review.json`, {
+        model: "gpt-5.6-sol",
+        effort: "xhigh",
+      }),
+    ).toEqual([
+      "exec",
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      "model_reasoning_effort=xhigh",
+      "--ephemeral",
+      "--ignore-user-config",
+      "--sandbox",
+      "read-only",
+      "--output-schema",
+      String.raw`C:\schemas\review.json`,
+      "-",
+    ]);
+  });
+
+  it("keeps the default model but adds effort when only effort is chosen", () => {
+    expect(
+      buildCodexExecArgs(String.raw`C:\schemas\review.json`, { effort: "high" }),
+    ).toEqual([
+      "exec",
+      "--model",
+      "gpt-5.6-terra",
+      "-c",
+      "model_reasoning_effort=high",
+      "--ephemeral",
+      "--ignore-user-config",
+      "--sandbox",
+      "read-only",
+      "--output-schema",
+      String.raw`C:\schemas\review.json`,
+      "-",
+    ]);
+  });
 });

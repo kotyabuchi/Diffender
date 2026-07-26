@@ -12,6 +12,7 @@ import {
   type ImplementationProgressEvent,
   type ReviewFeedbackDraft,
   type ReviewProgressEvent,
+  type ReviewRunOptions,
 } from "../shared/contracts";
 import { validateRepository } from "./git";
 import type { ReviewService } from "./review-service";
@@ -49,9 +50,15 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.reviewsCurrent, (_event, projectId: unknown) =>
     reviewService.currentReview(requiredString(projectId, "projectId")),
   );
-  ipcMain.handle(IPC_CHANNELS.reviewsRun, (_event, projectId: unknown) =>
-    reviewService.runReview(requiredString(projectId, "projectId")),
+  ipcMain.handle(
+    IPC_CHANNELS.reviewsRun,
+    (_event, projectId: unknown, options: unknown) =>
+      reviewService.runReview(
+        requiredString(projectId, "projectId"),
+        optionalReviewRunOptions(options),
+      ),
   );
+  ipcMain.handle(IPC_CHANNELS.reviewsModels, () => appServer.listModels());
   ipcMain.handle(IPC_CHANNELS.reviewsCancel, (_event, projectId: unknown) => {
     reviewService.cancelReview(requiredString(projectId, "projectId"));
   });
@@ -362,6 +369,36 @@ function optionalImplementationAgent(
     throw new TypeError("実装エージェントの指定が正しくありません。");
   }
   return value;
+}
+
+function optionalReviewRunOptions(value: unknown): ReviewRunOptions | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("レビュー設定の形式が正しくありません。");
+  }
+  const record = value as Record<string, unknown>;
+  const options: ReviewRunOptions = {};
+  if (record.model !== undefined && record.model !== null) {
+    if (
+      typeof record.model !== "string" ||
+      !/^[a-zA-Z0-9._-]{1,64}$/u.test(record.model)
+    ) {
+      throw new TypeError("モデルの指定が正しくありません。");
+    }
+    options.model = record.model;
+  }
+  if (record.effort !== undefined && record.effort !== null) {
+    if (
+      record.effort !== "low" &&
+      record.effort !== "medium" &&
+      record.effort !== "high" &&
+      record.effort !== "xhigh"
+    ) {
+      throw new TypeError("推論強度の指定が正しくありません。");
+    }
+    options.effort = record.effort;
+  }
+  return options.model || options.effort ? options : undefined;
 }
 
 function requiredNote(value: unknown): string {
