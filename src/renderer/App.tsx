@@ -80,8 +80,7 @@ const PROGRESS_LABELS: Record<ReviewProgressEvent["stage"], string> = {
   failed: "レビューに失敗しました",
 };
 
-function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
-  const paths: Record<IconName, ReactNode> = {
+const ICON_PATHS: Record<IconName, ReactNode> = {
     add: <path d="M12 5v14M5 12h14" />,
     branch: (
       <>
@@ -135,8 +134,9 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
         <path d="m19 16 .6 2.4L22 19l-2.4.6L19 22l-.6-2.4L16 19l2.4-.6z" />
       </>
     ),
-  };
+};
 
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (
     <svg
       aria-hidden="true"
@@ -146,7 +146,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
       viewBox="0 0 24 24"
       width={size}
     >
-      {paths[name]}
+      {ICON_PATHS[name]}
     </svg>
   );
 }
@@ -158,18 +158,20 @@ function getErrorMessage(error: unknown): string {
   return "予期しない問題が発生しました。";
 }
 
+const DATE_FORMATTER = new Intl.DateTimeFormat("ja-JP", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatDate(value: string | null): string {
   if (!value) return "まだありません";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return DATE_FORMATTER.format(date);
 }
 
 function shortPath(path: string): string {
@@ -675,6 +677,7 @@ function FindingNote({
         </span>
       </div>
       <textarea
+        aria-label="自分のメモ"
         disabled={readOnly}
         maxLength={4_000}
         onBlur={() => void save()}

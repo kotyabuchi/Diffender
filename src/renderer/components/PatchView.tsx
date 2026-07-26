@@ -166,6 +166,7 @@ export const FeedbackComposer = memo(function FeedbackComposer({
         <strong>{targetLabel}</strong>
       </div>
       <textarea
+        aria-label={`${targetLabel} へのフィードバック`}
         autoFocus={autoFocus}
         disabled={disabled}
         maxLength={4_000}
