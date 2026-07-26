@@ -9,6 +9,7 @@ const config: ForgeConfig = {
     asar: true,
     name: "Diffender",
     executableName: "diffender",
+    icon: "./resources/icon",
   },
   rebuildConfig: {},
   makers: [new MakerZIP({}, ["win32"])],
