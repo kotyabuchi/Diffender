@@ -90,6 +90,16 @@ MVP は選択した directory を一つの project として登録します。�
 
 source の編集、commit、push を追加する場合は、現在の read-only product boundary を変える重大な決定です。個別 permission、preview、undo、audit log、threat model 更新なしには導入しません。
 
+### 変更検知（差分が出たときの通知）の方針
+
+「差分が出たときに Diffender へ知らせる」手段の方針（決定日: 2026-07-26）。上記 file watcher 項目の詳細方針。
+
+- **git フックは不採用**: レビュー対象は未コミットの作業ツリー差分。git フック（post-commit / post-checkout / post-merge 等）は git 操作時にしか発火せず、ファイル編集＝未コミット差分では発火しないため用途に合わない。
+- **① アプリ内ファイルウォッチャー（土台）**: main プロセスが登録 worktree を監視（`.gitignore` 尊重・デバウンス・`node_modules` 等除外）し、**Git status のみの refresh**（`hasChanges` / stale 更新）を行う。**AI レビューは自動起動しない**（refresh ≠ AI review。従量課金 review の自動開始は「意図的に予定しないこと」に一致）。
+- **② 外部からの push（例: 実装エージェント完了の即時通知）が要る場合**: Diffender に inbound チャネルは無い（IPC は renderer↔main 専用）ため、**所定の sentinel ファイルを書いて①のウォッチャーに拾わせる「ファイル・トリガー方式」を採用**（ネットワーク面を増やさず最小リスク）。localhost の受信エンドポイントや named pipe は攻撃面が増え、[security.md](security.md) の「任意チャネル／任意 URL を増やさない」不変条件に触れるため、正当な理由と threat model 更新が出るまで見送る。
+- **推奨構成**: ①を常時の土台にし、必要なら②を上乗せするハイブリッド。
+- **着手順の見立て**: ①はほぼ main プロセス側の作業（`git.ts` / `review-service` / IPC / ウォッチャー新設）で、Issue #1（サイドバーの worktree ツリー表示）との競合は小さい。UI 追従は「stale バッジが自動で付く」程度で済む。
+
 ## 候補 — Storage evolution
 
 MVP は atomic JSON です。次の条件が現れたら SQLite を評価します。
