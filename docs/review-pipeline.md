@@ -274,6 +274,8 @@ Codex review を押すと、対象差分が Codex CLI の処理に渡されま�
 
 UI は実行前に、AI review であること、ChatGPT 利用上限を消費し得ること、API key 認証は受け付けないことを明確にします。
 
+トークン/コスト消費の実測と削減レバーの評価（推論強度・モデル選択・prompt caching・増分レビュー）は [review-cost-optimization.md](review-cost-optimization.md) を参照してください。
+
 ## 14. Review後の実装引き渡し
 
 review pipeline の出力は承認と reviewer note を加えた修正指示へ変換できます。コピー時と直接送信時には current diff hash と review ID を再照合し、古い判断を別の差分へ適用しません。raw patch は修正指示へ複製せず、Codex が登録 project の現在状態を再確認します。

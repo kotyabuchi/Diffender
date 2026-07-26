@@ -74,9 +74,10 @@ MVP は選択した directory を一つの project として登録します。�
 - finding filtering、sort、resolved state
 - review history と snapshot comparison
 - unchanged group だけの安全な approval carry-forward
+- 変更のないファイルを再送しない増分レビュー（input トークン削減。効果は diff サイズ比例）
 - local static analysis / test 結果との統合
 
-モデル名や reasoning option を UI に増やす前に、ChatGPT plan の互換性、利用枠の説明、cache identity を定義します。
+モデル名や reasoning option を UI に増やす前に、ChatGPT plan の互換性、利用枠の説明、cache identity を定義します。トークン/コスト削減レバーの実測評価（推論強度・モデル・prompt caching・増分レビューの方式案）は [review-cost-optimization.md](review-cost-optimization.md) にまとめてあります。**推論強度やモデルのダウングレードはトークン削減には効かず品質を損なうため、削減目的では採用しない**という結論です。
 
 ## 候補 — Developer workflow
 

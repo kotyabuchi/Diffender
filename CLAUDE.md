@@ -125,6 +125,6 @@ Windows ZIP のみ（installer / 自動 update / code signing / macOS・Linux �
 ## ドキュメント
 
 - [製品仕様](docs/product-spec.md) / [アーキテクチャ](docs/architecture.md) / [開発ガイド](docs/development.md)
-- [セキュリティ](docs/security.md) / [レビューパイプライン](docs/review-pipeline.md)
+- [セキュリティ](docs/security.md) / [レビューパイプライン](docs/review-pipeline.md) / [レビューのコスト最適化](docs/review-cost-optimization.md)
 - [Codexタスク連携](docs/codex-handoff.md) / [実装エージェント判定](docs/implementation-agents.md)
 - [実装計画](docs/implementation-plan.md) / [ロードマップ](docs/roadmap.md)

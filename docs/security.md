@@ -170,7 +170,7 @@ MVP の JSON state は OS user account の filesystem 権限に依存し、ア�
 ## 10. Cache と approval integrity
 
 - diff を deterministic に canonicalize して cryptographic hash を計算する。
-- cache は project identity と diff hash が一致した場合だけ使用する。
+- cache は project identity、diff hash、および指定された model / reasoning effort が一致した場合だけ使用する。
 - group fingerprint は group の意味と対象差分に関係する canonical field から計算する。
 - approval 更新時に current diff、snapshot、group fingerprint を main で照合する。
 - hash 不一致、group 欠落、snapshot 不一致は未承認として扱う。
@@ -178,7 +178,7 @@ MVP の JSON state は OS user account の filesystem 権限に依存し、ア�
 
 fingerprint は改ざん防止署名ではなく、意図しない stale approval を防ぐ整合性 mechanism です。local administrator や同一 OS user の悪意ある process への防御ではありません。
 
-MVP の cache / fingerprint に prompt、model、JSON Schema の contract version は含まれません。これらを変更する release で既存 cache を確実に無効化する仕組みは post-MVP 課題です。
+cache key は diff hash に加え、明示指定された model / reasoning effort を含みます（既定設定ではキーは従来どおりで既存 cache を維持）。renderer が渡す model / effort は main（`optionalReviewRunOptions`）で形式と enum を再検証します。一方 group fingerprint には prompt、model、JSON Schema の contract version は含まれません。prompt / schema / fingerprint algorithm の contract version を変更する release で既存 cache を確実に無効化する仕組みは post-MVP 課題です。
 
 ## 11. Logging と error
 
