@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CodexStatus, ProjectRecord } from "../shared/contracts";
-import { type ErrorState, getErrorMessage } from "./lib/error";
-import { useReviewActions } from "./hooks/useReviewActions";
-import { useReviewModels } from "./hooks/useReviewModels";
-import { useReviewProgress } from "./hooks/useReviewProgress";
 import { EmptyInbox } from "./components/EmptyInbox";
 import { ErrorNotice } from "./components/ErrorNotice";
 import { LoadingWorkspace } from "./components/LoadingWorkspace";
@@ -12,6 +8,10 @@ import { ProjectToolbar } from "./components/ProjectToolbar";
 import { ReviewOverviewHeader } from "./components/ReviewOverviewHeader";
 import { ReviewWorkspace } from "./components/ReviewWorkspace";
 import { Topbar } from "./components/Topbar";
+import { useReviewActions } from "./hooks/useReviewActions";
+import { useReviewModels } from "./hooks/useReviewModels";
+import { useReviewProgress } from "./hooks/useReviewProgress";
+import { type ErrorState, getErrorMessage } from "./lib/error";
 
 export function App() {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -30,12 +30,9 @@ export function App() {
       codexStatus.authMethod === "chatgpt",
   );
 
-  const showError = useCallback(
-    (title: string, caught: unknown, retry?: () => void) => {
-      setError({ title, detail: getErrorMessage(caught), retry });
-    },
-    [],
-  );
+  const showError = useCallback((title: string, caught: unknown, retry?: () => void) => {
+    setError({ title, detail: getErrorMessage(caught), retry });
+  }, []);
   const clearError = useCallback(() => setError(null), []);
 
   const {
@@ -58,9 +55,7 @@ export function App() {
   const selectedProgress = selectedProjectId
     ? progressByProject[selectedProjectId]
     : undefined;
-  const isReviewing = selectedProjectId
-    ? busyProjectIds.has(selectedProjectId)
-    : false;
+  const isReviewing = selectedProjectId ? busyProjectIds.has(selectedProjectId) : false;
 
   const {
     snapshot,
@@ -193,9 +188,7 @@ export function App() {
 
   const updateProject = useCallback((updated: ProjectRecord) => {
     setProjects((previous) =>
-      previous.map((project) =>
-        project.id === updated.id ? updated : project,
-      ),
+      previous.map((project) => (project.id === updated.id ? updated : project)),
     );
   }, []);
 
@@ -234,7 +227,9 @@ export function App() {
           />
 
           <main className="main-pane">
-            {error ? <ErrorNotice error={error} onDismiss={() => setError(null)} /> : null}
+            {error ? (
+              <ErrorNotice error={error} onDismiss={() => setError(null)} />
+            ) : null}
 
             {selectedProject ? (
               <>

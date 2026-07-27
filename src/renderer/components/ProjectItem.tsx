@@ -16,12 +16,12 @@ export function ProjectItem({
   onSelect: () => void;
   onRemove: () => void;
 }) {
-  const status = progress
-    ? progressToReviewStatus(progress.stage)
-    : project.reviewStatus;
+  const status = progress ? progressToReviewStatus(progress.stage) : project.reviewStatus;
 
   return (
-    <div className={`project-item-shell ${selected ? "project-item-shell--selected" : ""}`}>
+    <div
+      className={`project-item-shell ${selected ? "project-item-shell--selected" : ""}`}
+    >
       <button
         aria-current={selected ? "page" : undefined}
         className="project-item"

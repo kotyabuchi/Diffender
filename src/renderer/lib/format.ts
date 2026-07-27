@@ -29,7 +29,5 @@ export function getReviewHeadline(summary: string): string {
     .replace(/(?:でした|です)[。！？]?$/u, "")
     .replace(/[。！？]$/u, "");
   const characters = Array.from(headline);
-  return characters.length > 64
-    ? `${characters.slice(0, 64).join("")}…`
-    : headline;
+  return characters.length > 64 ? `${characters.slice(0, 64).join("")}…` : headline;
 }

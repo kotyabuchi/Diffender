@@ -3,7 +3,10 @@ import type { CodexStatus } from "../../shared/contracts";
 export function CodexIndicator({ status }: { status: CodexStatus | null }) {
   if (!status) {
     return (
-      <div className="codex-status codex-status--loading" aria-label="Codex の状態を確認中">
+      <div
+        className="codex-status codex-status--loading"
+        aria-label="Codex の状態を確認中"
+      >
         <span className="status-dot" />
         <span>Codex を確認中</span>
       </div>
@@ -18,7 +21,7 @@ export function CodexIndicator({ status }: { status: CodexStatus | null }) {
       ? "ChatGPT で接続"
       : status.authMethod === "api-key"
         ? "APIキーはレビュー非対応"
-      : "Codex 要ログイン";
+        : "Codex 要ログイン";
 
   return (
     <div

@@ -41,7 +41,9 @@ export function ReviewToc({ groups }: { groups: ReviewGroup[] }) {
       },
     );
 
-    sections.forEach((section) => observer.observe(section));
+    sections.forEach((section) => {
+      observer.observe(section);
+    });
     return () => observer.disconnect();
   }, [entries]);
 

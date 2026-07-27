@@ -1,12 +1,4 @@
-import {
-  Fragment,
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DiffFile,
   DiffSide,
@@ -223,7 +215,9 @@ export const FeedbackCard = memo(function FeedbackCard({
   return (
     <article className="feedback-card">
       <header>
-        <span className="feedback-card__avatar" aria-hidden="true">自</span>
+        <span className="feedback-card__avatar" aria-hidden="true">
+          自
+        </span>
         <strong>あなた</strong>
         <span>{targetLabel}</span>
       </header>
@@ -329,7 +323,13 @@ export const PatchView = memo(function PatchView({
     (side: DiffSide, rowIndex: number, hunkId: number) => {
       if (readOnly) return;
       draggingRef.current = true;
-      setSelection({ side, hunkId, startIndex: rowIndex, endIndex: rowIndex, ready: false });
+      setSelection({
+        side,
+        hunkId,
+        startIndex: rowIndex,
+        endIndex: rowIndex,
+        ready: false,
+      });
     },
     [readOnly],
   );
@@ -355,7 +355,10 @@ export const PatchView = memo(function PatchView({
           <strong>{fileName}</strong>
         </span>
         {feedback.length > 0 ? (
-          <span className="patch__comments" aria-label={`${feedback.length} 件のフィードバック`}>
+          <span
+            className="patch__comments"
+            aria-label={`${feedback.length} 件のフィードバック`}
+          >
             <span aria-hidden="true">▣</span>
             {feedback.length}
           </span>
@@ -376,7 +379,9 @@ export const PatchView = memo(function PatchView({
 
       {file.binary ? (
         <div className="patch__fallback">
-          <div className="patch__binary">バイナリファイルの変更です。差分は表示できません。</div>
+          <div className="patch__binary">
+            バイナリファイルの変更です。差分は表示できません。
+          </div>
           {feedback.map((item) => (
             <FeedbackCard
               feedback={item}

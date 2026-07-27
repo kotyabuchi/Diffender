@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { app, BrowserWindow } from "electron";
+import { ClaudeRunner } from "./main/claude";
 import { CodexRunner } from "./main/codex";
 import { CodexAppServer } from "./main/codex-app-server";
-import { ClaudeRunner } from "./main/claude";
 import {
   registerIpcHandlers,
   removeIpcHandlers,
@@ -10,11 +10,7 @@ import {
   sendImplementationProgress,
   sendReviewProgress,
 } from "./main/ipc";
-import {
-  createDefaultState,
-  type AppState,
-  ReviewService,
-} from "./main/review-service";
+import { type AppState, createDefaultState, ReviewService } from "./main/review-service";
 import { materializeReviewSchema } from "./main/schema";
 import { AtomicJsonStore } from "./main/store";
 
@@ -54,9 +50,7 @@ async function createWindow(): Promise<void> {
       message: event.message,
     });
   });
-  const claude = new ClaudeRunner((event) =>
-    sendImplementationProgress(window, event),
-  );
+  const claude = new ClaudeRunner((event) => sendImplementationProgress(window, event));
   const schemaPath = await materializeReviewSchema(userDataPath);
   const service = new ReviewService(store, codex, schemaPath, (event) =>
     sendReviewProgress(window, event),

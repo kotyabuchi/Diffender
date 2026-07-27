@@ -93,9 +93,7 @@ export function ProjectToolbar({
               <select
                 value={selectedEffort ?? ""}
                 onChange={(event) =>
-                  setSelectedEffort(
-                    (event.target.value || null) as ReviewEffort | null,
-                  )
+                  setSelectedEffort((event.target.value || null) as ReviewEffort | null)
                 }
               >
                 <option value="">既定</option>

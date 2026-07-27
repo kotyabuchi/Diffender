@@ -1,28 +1,22 @@
+import { type BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
 import {
-  clipboard,
-  dialog,
-  ipcMain,
-  shell,
-  type BrowserWindow,
-} from "electron";
-import {
-  IPC_CHANNELS,
   type CodexTaskProgressEvent,
   type ImplementationAgent,
   type ImplementationProgressEvent,
+  IPC_CHANNELS,
   type ReviewFeedbackDraft,
   type ReviewProgressEvent,
   type ReviewRunOptions,
 } from "../shared/contracts";
-import { validateRepository } from "./git";
-import type { ReviewService } from "./review-service";
+import type { ClaudeRunner } from "./claude";
 import type { CodexRunner } from "./codex";
 import type { CodexAppServer } from "./codex-app-server";
-import type { ClaudeRunner } from "./claude";
+import { validateRepository } from "./git";
 import {
   detectImplementationAgent,
   inspectProjectAgentSignals,
 } from "./implementation-agent";
+import type { ReviewService } from "./review-service";
 
 export function registerIpcHandlers(
   window: BrowserWindow,
@@ -80,13 +74,7 @@ export function registerIpcHandlers(
   );
   ipcMain.handle(
     IPC_CHANNELS.reviewsFindingNote,
-    (
-      _event,
-      projectId: unknown,
-      reviewId: unknown,
-      findingId: unknown,
-      note: unknown,
-    ) =>
+    (_event, projectId: unknown, reviewId: unknown, findingId: unknown, note: unknown) =>
       reviewService.saveFindingNote(
         requiredString(projectId, "projectId"),
         requiredString(reviewId, "reviewId"),
@@ -96,13 +84,7 @@ export function registerIpcHandlers(
   );
   ipcMain.handle(
     IPC_CHANNELS.reviewsFeedbackAdd,
-    (
-      _event,
-      projectId: unknown,
-      reviewId: unknown,
-      groupId: unknown,
-      draft: unknown,
-    ) =>
+    (_event, projectId: unknown, reviewId: unknown, groupId: unknown, draft: unknown) =>
       reviewService.addFeedback(
         requiredString(projectId, "projectId"),
         requiredString(reviewId, "reviewId"),
@@ -139,16 +121,13 @@ export function registerIpcHandlers(
           ),
         ),
   );
-  ipcMain.handle(
-    IPC_CHANNELS.codexTaskCreate,
-    async (_event, projectId: unknown) => {
-      const id = requiredString(projectId, "projectId");
-      const project = await reviewService.getProject(id);
-      const thread = await appServer.createThread(project);
-      const updated = await reviewService.linkCodexTask(id, thread.id);
-      return { project: updated, thread };
-    },
-  );
+  ipcMain.handle(IPC_CHANNELS.codexTaskCreate, async (_event, projectId: unknown) => {
+    const id = requiredString(projectId, "projectId");
+    const project = await reviewService.getProject(id);
+    const thread = await appServer.createThread(project);
+    const updated = await reviewService.linkCodexTask(id, thread.id);
+    return { project: updated, thread };
+  });
   ipcMain.handle(
     IPC_CHANNELS.codexTaskLink,
     async (_event, projectId: unknown, threadId: unknown) => {
@@ -159,13 +138,8 @@ export function registerIpcHandlers(
       return { project, thread };
     },
   );
-  ipcMain.handle(
-    IPC_CHANNELS.codexTaskUnlink,
-    (_event, projectId: unknown) =>
-      reviewService.linkCodexTask(
-        requiredString(projectId, "projectId"),
-        null,
-      ),
+  ipcMain.handle(IPC_CHANNELS.codexTaskUnlink, (_event, projectId: unknown) =>
+    reviewService.linkCodexTask(requiredString(projectId, "projectId"), null),
   );
   ipcMain.handle(
     IPC_CHANNELS.codexFeedbackCopy,
@@ -181,11 +155,7 @@ export function registerIpcHandlers(
     IPC_CHANNELS.codexFeedbackSend,
     async (_event, projectId: unknown, reviewId: unknown) => {
       const status = await codex.status();
-      if (
-        !status.installed ||
-        !status.authenticated ||
-        status.authMethod !== "chatgpt"
-      ) {
+      if (!status.installed || !status.authenticated || status.authMethod !== "chatgpt") {
         throw new Error(
           status.authenticated
             ? "直接送信にはCodex CLIのChatGPTログインが必要です。APIキー認証は利用しません。"
@@ -197,19 +167,13 @@ export function registerIpcHandlers(
         id,
         requiredString(reviewId, "reviewId"),
       );
-      return appServer.sendFeedback(
-        await reviewService.getProject(id),
-        feedback,
-      );
+      return appServer.sendFeedback(await reviewService.getProject(id), feedback);
     },
   );
-  ipcMain.handle(
-    IPC_CHANNELS.codexTaskOpen,
-    async (_event, threadId: unknown) => {
-      const id = requiredThreadId(threadId);
-      await shell.openExternal(`codex://threads/${encodeURIComponent(id)}`);
-    },
-  );
+  ipcMain.handle(IPC_CHANNELS.codexTaskOpen, async (_event, threadId: unknown) => {
+    const id = requiredThreadId(threadId);
+    await shell.openExternal(`codex://threads/${encodeURIComponent(id)}`);
+  });
   ipcMain.handle(
     IPC_CHANNELS.implementationsDetect,
     async (_event, projectId: unknown) => {
@@ -244,10 +208,7 @@ export function registerIpcHandlers(
       const [codexState, claudeState, feedback] = await Promise.all([
         codex.status(),
         claude.status(),
-        reviewService.implementationFeedback(
-          id,
-          requiredString(reviewId, "reviewId"),
-        ),
+        reviewService.implementationFeedback(id, requiredString(reviewId, "reviewId")),
       ]);
       const detection = detectImplementationAgent(
         project,
@@ -275,11 +236,7 @@ export function registerIpcHandlers(
       }
       if (detection.selected === "claude") {
         if (!claudeState.installed) throw new Error(claudeState.detail);
-        const result = await claude.sendFeedback(
-          id,
-          project.rootPath,
-          feedback,
-        );
+        const result = await claude.sendFeedback(id, project.rootPath, feedback);
         return {
           agent: "claude" as const,
           operationId: result.operationId,
@@ -348,9 +305,7 @@ function requiredBoolean(value: unknown, name: string): boolean {
 }
 
 function optionalBoolean(value: unknown, name: string): boolean | undefined {
-  return value === undefined || value === null
-    ? undefined
-    : requiredBoolean(value, name);
+  return value === undefined || value === null ? undefined : requiredBoolean(value, name);
 }
 
 function requiredThreadId(value: unknown): string {
@@ -361,9 +316,7 @@ function requiredThreadId(value: unknown): string {
   return threadId;
 }
 
-function optionalImplementationAgent(
-  value: unknown,
-): ImplementationAgent | null {
+function optionalImplementationAgent(value: unknown): ImplementationAgent | null {
   if (value === null || value === undefined) return null;
   if (value !== "codex" && value !== "claude") {
     throw new TypeError("実装エージェントの指定が正しくありません。");
@@ -407,7 +360,6 @@ function requiredNote(value: unknown): string {
   }
   return value;
 }
-
 
 function requiredFeedbackDraft(value: unknown): ReviewFeedbackDraft {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

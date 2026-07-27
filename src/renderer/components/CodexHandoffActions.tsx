@@ -1,6 +1,6 @@
 import type { ImplementationAgent } from "../../shared/contracts";
-import { implementationAgentLabel } from "../lib/review";
 import type { CodexHandoffBusy } from "../hooks/useCodexHandoff";
+import { implementationAgentLabel } from "../lib/review";
 import { Icon } from "./Icon";
 
 export function CodexHandoffActions({
@@ -32,9 +32,7 @@ export function CodexHandoffActions({
       </button>
       <button
         className="primary-button"
-        disabled={
-          stale || !agentAvailable || busy !== null || implementationRunning
-        }
+        disabled={stale || !agentAvailable || busy !== null || implementationRunning}
         onClick={onSend}
         type="button"
       >

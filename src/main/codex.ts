@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { win32 } from "node:path";
 import type {
@@ -100,10 +100,7 @@ export class CodexRunner {
     const invocation = resolveCodexInvocation();
     const child = spawn(
       invocation.command,
-      [
-        ...invocation.prefixArgs,
-        ...buildCodexExecArgs(schemaPath, options),
-      ],
+      [...invocation.prefixArgs, ...buildCodexExecArgs(schemaPath, options)],
       {
         cwd,
         env: sanitizedEnvironment(),
@@ -165,7 +162,7 @@ export function resolveCodexInvocation(
   const fileExists = options.fileExists ?? existsSync;
   const nodeExecutable =
     options.nodeExecutable ??
-    (electron ? windowsNodeCandidates(env).find(fileExists) ?? "node.exe" : execPath);
+    (electron ? (windowsNodeCandidates(env).find(fileExists) ?? "node.exe") : execPath);
   const override = env.DIFFENDER_CODEX_PATH?.trim();
 
   if (override) {
@@ -196,7 +193,11 @@ export function parseCodexReview(raw: string): CodexReviewResult {
   } catch {
     throw new Error("Codexの応答をJSONとして読み取れませんでした。");
   }
-  if (!isRecord(parsed) || typeof parsed.summary !== "string" || !Array.isArray(parsed.groups)) {
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.summary !== "string" ||
+    !Array.isArray(parsed.groups)
+  ) {
     throw new Error("Codexのレビュー結果が必要な形式を満たしていません。");
   }
   const groups = parsed.groups.map((value, index) => parseGroup(value, index));
@@ -287,11 +288,7 @@ function commandDirectories(env: NodeJS.ProcessEnv): string[] {
       .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
       .filter(Boolean),
   ];
-  return [
-    ...new Set(
-      directories.filter((entry): entry is string => Boolean(entry)),
-    ),
-  ];
+  return [...new Set(directories.filter((entry): entry is string => Boolean(entry)))];
 }
 
 function nodeScriptInvocation(
@@ -352,7 +349,10 @@ function captureChild(
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
       if (target === "stdout") stdout += chunk.toString("utf8");
       else stderr += chunk.toString("utf8");
-      if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > MAX_CODEX_OUTPUT_BYTES) {
+      if (
+        Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >
+        MAX_CODEX_OUTPUT_BYTES
+      ) {
         child.kill();
         finish(() => reject(new Error("Codexの出力が上限を超えました。")));
       }

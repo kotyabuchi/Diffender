@@ -54,9 +54,7 @@ describe("diff hashing", () => {
   it("is deterministic across file and newline ordering differences", () => {
     const first = createUntrackedDiff("b.txt", "hello\r\n");
     const second = createUntrackedDiff("a.txt", "world\n");
-    expect(computeDiffHash([first, second])).toBe(
-      computeDiffHash([second, first]),
-    );
+    expect(computeDiffHash([first, second])).toBe(computeDiffHash([second, first]));
   });
 
   it("ties group fingerprints to the diff", () => {
@@ -93,9 +91,7 @@ describe("diff hashing", () => {
       findings: [{ ...finding, reviewerNote: "修正後に再確認する" }],
     };
 
-    expect(groupFingerprint("diff", group)).toBe(
-      groupFingerprint("diff", withNote),
-    );
+    expect(groupFingerprint("diff", group)).toBe(groupFingerprint("diff", withNote));
   });
 
   it("separates cached reviews by review contract version", () => {

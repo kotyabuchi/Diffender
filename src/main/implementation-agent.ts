@@ -23,10 +23,9 @@ export function inspectProjectAgentSignals(
       join(rootPath, "CLAUDE.local.md"),
       join(rootPath, ".claude"),
     ].some(fileExists),
-    codexConfigured: [
-      join(rootPath, "AGENTS.md"),
-      join(rootPath, ".codex"),
-    ].some(fileExists),
+    codexConfigured: [join(rootPath, "AGENTS.md"), join(rootPath, ".codex")].some(
+      fileExists,
+    ),
   };
 }
 
@@ -56,18 +55,10 @@ export function detectImplementationAgent(
   if (codexLinked) {
     recommended = "codex";
     confidence = "high";
-  } else if (
-    signals.claudeConfigured &&
-    !signals.codexConfigured &&
-    claudeInstalled
-  ) {
+  } else if (signals.claudeConfigured && !signals.codexConfigured && claudeInstalled) {
     recommended = "claude";
     confidence = "medium";
-  } else if (
-    signals.codexConfigured &&
-    !signals.claudeConfigured &&
-    codexInstalled
-  ) {
+  } else if (signals.codexConfigured && !signals.claudeConfigured && codexInstalled) {
     recommended = "codex";
     confidence = "medium";
   } else if (claudeInstalled && !codexInstalled) {
@@ -85,9 +76,7 @@ export function detectImplementationAgent(
     source: manual ? "manual" : recommended ? "auto" : "unknown",
     confidence: manual ? "high" : confidence,
     reasons:
-      reasons.length > 0
-        ? reasons
-        : ["実装エージェントを判断できる設定がありません。"],
+      reasons.length > 0 ? reasons : ["実装エージェントを判断できる設定がありません。"],
     codexInstalled,
     claudeInstalled,
     codexLinked,

@@ -55,7 +55,6 @@ export interface ReviewFinding {
   reviewerNote?: string;
 }
 
-
 export type DiffSide = "old" | "new";
 
 export type ReviewFeedbackScope =
@@ -218,28 +217,15 @@ export interface DiffenderApi {
     linkTask(projectId: string, threadId: string): Promise<CodexTaskLinkResult>;
     unlinkTask(projectId: string): Promise<ProjectRecord>;
     copyFeedback(projectId: string, reviewId: string): Promise<void>;
-    sendFeedback(
-      projectId: string,
-      reviewId: string,
-    ): Promise<CodexTaskSendResult>;
+    sendFeedback(projectId: string, reviewId: string): Promise<CodexTaskSendResult>;
     openTask(threadId: string): Promise<void>;
-    onTaskProgress(
-      listener: (event: CodexTaskProgressEvent) => void,
-    ): () => void;
+    onTaskProgress(listener: (event: CodexTaskProgressEvent) => void): () => void;
   };
   implementations: {
     detect(projectId: string): Promise<ImplementationAgentDetection>;
-    select(
-      projectId: string,
-      agent: ImplementationAgent | null,
-    ): Promise<ProjectRecord>;
-    sendFeedback(
-      projectId: string,
-      reviewId: string,
-    ): Promise<ImplementationSendResult>;
-    onProgress(
-      listener: (event: ImplementationProgressEvent) => void,
-    ): () => void;
+    select(projectId: string, agent: ImplementationAgent | null): Promise<ProjectRecord>;
+    sendFeedback(projectId: string, reviewId: string): Promise<ImplementationSendResult>;
+    onProgress(listener: (event: ImplementationProgressEvent) => void): () => void;
   };
 }
 

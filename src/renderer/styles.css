@@ -21,8 +21,7 @@
   --medium-light: #fff5cc;
   --low: #356859;
   --low-light: #e2f0eb;
-  --mono:
-    "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --serif: "Noto Sans JP Variable", "Noto Sans JP", "Yu Gothic UI", sans-serif;
 }
 
@@ -125,8 +124,7 @@ button:disabled {
   place-items: center;
   border: 1px solid var(--ink);
   background:
-    linear-gradient(135deg, transparent 0 76%, var(--paper-deep) 76%),
-    var(--paper-raised);
+    linear-gradient(135deg, transparent 0 76%, var(--paper-deep) 76%), var(--paper-raised);
   font-family: var(--serif);
   font-size: 19px;
   line-height: 1;
@@ -476,8 +474,8 @@ button:disabled {
   min-width: 0;
   overflow: auto;
   background:
-    linear-gradient(90deg, rgba(32, 33, 30, 0.028) 1px, transparent 1px) 31px 0 /
-      48px 100%,
+    linear-gradient(90deg, rgba(32, 33, 30, 0.028) 1px, transparent 1px) 31px 0 / 48px
+    100%,
     var(--paper);
   scrollbar-color: var(--line-strong) transparent;
 }
@@ -1273,12 +1271,7 @@ button:disabled {
 .skeleton::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.48),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.48), transparent);
   content: "";
   animation: shimmer 1.4s infinite;
   transform: translateX(-100%);
@@ -2429,7 +2422,12 @@ button:disabled {
   place-items: center;
   overflow: hidden;
   background:
-    linear-gradient(90deg, transparent 50%, rgba(32, 33, 30, 0.06) 50% 50.1%, transparent 50.1%),
+    linear-gradient(
+      90deg,
+      transparent 50%,
+      rgba(32, 33, 30, 0.06) 50% 50.1%,
+      transparent 50.1%
+    ),
     linear-gradient(rgba(32, 33, 30, 0.025) 1px, transparent 1px) 0 0 / 100% 48px,
     var(--paper);
 }

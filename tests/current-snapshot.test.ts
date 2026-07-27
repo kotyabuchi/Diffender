@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ReviewSnapshot } from "../src/shared/contracts";
 import { pickCurrentSnapshot, reviewCacheKey } from "../src/main/review-service";
+import type { ReviewSnapshot } from "../src/shared/contracts";
 
 function snapshot(id: string, diffHash: string, createdAt: string): ReviewSnapshot {
   return {

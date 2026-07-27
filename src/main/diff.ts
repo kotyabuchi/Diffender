@@ -128,9 +128,7 @@ export function groupFingerprint(
 
 function parseDiffHeaderPath(line: string): string {
   const match =
-    /^diff --git (?:"a\/(?:\\.|[^"])*"|a\/\S+) ("b\/(?:\\.|[^"])*"|b\/\S+)$/.exec(
-      line,
-    );
+    /^diff --git (?:"a\/(?:\\.|[^"])*"|a\/\S+) ("b\/(?:\\.|[^"])*"|b\/\S+)$/.exec(line);
   if (!match?.[1]) return "unknown";
   const token = match[1];
   if (!token.startsWith('"')) return token.slice(2);

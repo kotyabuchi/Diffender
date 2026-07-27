@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
-  ProjectRecord,
   ImplementationAgent,
+  ProjectRecord,
   ReviewFeedbackDraft,
   ReviewFeedbackScope,
   ReviewGroup,
@@ -9,10 +9,10 @@ import type {
   ReviewRunOptions,
   ReviewSnapshot,
 } from "../shared/contracts";
-import { CodexRunner } from "./codex";
+import type { CodexRunner } from "./codex";
 import { groupFingerprint } from "./diff";
 import { collectRepositoryDiff, refreshProject } from "./git";
-import { AtomicJsonStore } from "./store";
+import type { AtomicJsonStore } from "./store";
 
 const REVIEW_CACHE_VERSION = "ja-review-v2";
 
@@ -136,28 +136,37 @@ export class ReviewService {
     await this.setReviewStatus(projectId, "running");
 
     try {
-      this.progress({ projectId, stage: "reading", message: "ローカルの変更を読み取っています。" });
+      this.progress({
+        projectId,
+        stage: "reading",
+        message: "ローカルの変更を読み取っています。",
+      });
       const diff = await collectRepositoryDiff(project.rootPath);
       const cached = state.snapshots[projectId]?.[reviewCacheKey(diff.diffHash, options)];
       if (cached) {
         await this.setReviewStatus(projectId, "complete", cached.createdAt);
-        this.progress({ projectId, stage: "complete", message: "保存済みレビューを表示します。" });
+        this.progress({
+          projectId,
+          stage: "complete",
+          message: "保存済みレビューを表示します。",
+        });
         return { ...cached, source: "cache" };
       }
 
       if (diff.files.length === 0) {
-        const empty = createSnapshot(projectId, diff, "レビュー対象の変更はありません。", []);
+        const empty = createSnapshot(
+          projectId,
+          diff,
+          "レビュー対象の変更はありません。",
+          [],
+        );
         await this.saveSnapshot(empty);
         this.progress({ projectId, stage: "complete", message: empty.summary });
         return empty;
       }
 
       const status = await this.codex.status();
-      if (
-        !status.installed ||
-        !status.authenticated ||
-        status.authMethod !== "chatgpt"
-      ) {
+      if (!status.installed || !status.authenticated || status.authMethod !== "chatgpt") {
         throw new Error(
           status.authenticated
             ? "AIレビューには、Codex CLIのChatGPTログインが必要です。APIキー認証は利用しません。"
@@ -193,7 +202,11 @@ export class ReviewService {
       });
       const snapshot = createSnapshot(projectId, diff, result.summary, groups, options);
       await this.saveSnapshot(snapshot);
-      this.progress({ projectId, stage: "complete", message: "レビューが完了しました。" });
+      this.progress({
+        projectId,
+        stage: "complete",
+        message: "レビューが完了しました。",
+      });
       return snapshot;
     } catch (error) {
       await this.setReviewStatus(projectId, "failed");
@@ -264,7 +277,9 @@ export class ReviewService {
     await this.store.update((latest) => {
       const entry = findSnapshotEntry(latest.snapshots[projectId], reviewId);
       if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
-        throw new Error("レビューが古くなっています。再レビューしてからメモを保存してください。");
+        throw new Error(
+          "レビューが古くなっています。再レビューしてからメモを保存してください。",
+        );
       }
       const { key: cacheKey, snapshot } = entry;
       let found = false;
@@ -293,7 +308,6 @@ export class ReviewService {
     if (!updatedSnapshot) throw new Error("メモを保存できませんでした。");
     return updatedSnapshot;
   }
-
 
   async addFeedback(
     projectId: string,
@@ -396,9 +410,7 @@ export class ReviewService {
         group.id === groupId
           ? {
               ...group,
-              feedback: (group.feedback ?? []).filter(
-                (item) => item.id !== feedbackId,
-              ),
+              feedback: (group.feedback ?? []).filter((item) => item.id !== feedbackId),
             }
           : group,
       );
@@ -455,10 +467,7 @@ export class ReviewService {
     return updatedProject;
   }
 
-  async implementationFeedback(
-    projectId: string,
-    reviewId: string,
-  ): Promise<string> {
+  async implementationFeedback(projectId: string, reviewId: string): Promise<string> {
     const { project, snapshot } = await this.currentSnapshot(projectId, reviewId);
     const actionable = snapshot.groups.some((group) =>
       (group.feedback ?? []).some((item) => item.body.trim()),
@@ -584,10 +593,8 @@ export function pickCurrentSnapshot(
   hasChanges: boolean,
 ): ReviewSnapshot | null {
   if (!projectSnapshots) return null;
-  const newest = (
-    left: ReviewSnapshot | null,
-    right: ReviewSnapshot,
-  ): ReviewSnapshot => (!left || right.createdAt > left.createdAt ? right : left);
+  const newest = (left: ReviewSnapshot | null, right: ReviewSnapshot): ReviewSnapshot =>
+    !left || right.createdAt > left.createdAt ? right : left;
   const entries = Object.values(projectSnapshots);
   const exact = entries
     .filter((candidate) => candidate.diffHash === currentDiffHash)
@@ -681,9 +688,7 @@ function describeFeedbackScope(scope: ReviewFeedbackScope): string {
       ? `${scope.startLine}`
       : `${scope.startLine}-${scope.endLine}`;
   const side =
-    scope.side === "new"
-      ? "変更後のコード付近"
-      : "変更前=削除・変更された行の付近";
+    scope.side === "new" ? "変更後のコード付近" : "変更前=削除・変更された行の付近";
   return `${scope.file}:${range}行目（${side}）`;
 }
 

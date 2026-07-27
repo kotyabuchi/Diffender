@@ -58,7 +58,10 @@ export function ReviewOverviewHeader({
             <span style={{ width: `${metrics.approvalPercentage}%` }} />
           </span>
           <strong>
-            承認 <span>{metrics.approved}/{snapshot.groups.length}</span>
+            承認{" "}
+            <span>
+              {metrics.approved}/{snapshot.groups.length}
+            </span>
           </strong>
         </div>
       </div>

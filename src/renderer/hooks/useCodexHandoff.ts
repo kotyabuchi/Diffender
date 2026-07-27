@@ -44,8 +44,7 @@ export function useCodexHandoff({
   const [manualThreadId, setManualThreadId] = useState("");
   const [message, setMessage] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [detection, setDetection] =
-    useState<ImplementationAgentDetection | null>(null);
+  const [detection, setDetection] = useState<ImplementationAgentDetection | null>(null);
 
   const loadTasks = useCallback(
     async (all: boolean) => {
@@ -94,10 +93,7 @@ export function useCodexHandoff({
       setBusy("detect");
       setMessage("");
       try {
-        const updated = await window.diffender.implementations.select(
-          project.id,
-          agent,
-        );
+        const updated = await window.diffender.implementations.select(project.id, agent);
         onProjectUpdated(updated);
         const result = await window.diffender.implementations.detect(project.id);
         setDetection(result);
@@ -122,10 +118,7 @@ export function useCodexHandoff({
       setBusy("link");
       setMessage("");
       try {
-        const result = await window.diffender.codex.linkTask(
-          project.id,
-          threadId.trim(),
-        );
+        const result = await window.diffender.codex.linkTask(project.id, threadId.trim());
         const updated = await window.diffender.implementations.select(
           project.id,
           "codex",
@@ -152,10 +145,7 @@ export function useCodexHandoff({
     setMessage("");
     try {
       const result = await window.diffender.codex.createTask(project.id);
-      const updated = await window.diffender.implementations.select(
-        project.id,
-        "codex",
-      );
+      const updated = await window.diffender.implementations.select(project.id, "codex");
       onProjectUpdated(updated);
       setDetection(await window.diffender.implementations.detect(project.id));
       setTasks((previous) => [
@@ -210,13 +200,8 @@ export function useCodexHandoff({
     setBusy("send");
     setMessage("");
     try {
-      await window.diffender.implementations.sendFeedback(
-        project.id,
-        snapshot.id,
-      );
-      setMessage(
-        `${implementationAgentLabel(agent)}へフィードバックを送信しました。`,
-      );
+      await window.diffender.implementations.sendFeedback(project.id, snapshot.id);
+      setMessage(`${implementationAgentLabel(agent)}へフィードバックを送信しました。`);
     } catch (caught) {
       onError(`${implementationAgentLabel(agent)}へ送信できませんでした`, caught);
     } finally {
@@ -227,8 +212,7 @@ export function useCodexHandoff({
   const linked = project.codexThreadId
     ? tasks.find((task) => task.id === project.codexThreadId)
     : undefined;
-  const implementationRunning =
-    taskProgress?.status === "started";
+  const implementationRunning = taskProgress?.status === "started";
   const selectedAgent = detection?.selected ?? null;
   const agentAvailable =
     selectedAgent === "codex"

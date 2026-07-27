@@ -25,22 +25,16 @@ export function ImplementationAgentCard({
       title={detection?.reasons.join("\n")}
     >
       <span className="implementation-agent__mark" aria-hidden="true">
-        {selectedAgent === "codex"
-          ? "CX"
-          : selectedAgent === "claude"
-            ? "CL"
-            : "?"}
+        {selectedAgent === "codex" ? "CX" : selectedAgent === "claude" ? "CL" : "?"}
       </span>
       <div>
         <strong>
-          {selectedAgent
-            ? implementationAgentLabel(selectedAgent)
-            : "実装先を選択"}
+          {selectedAgent ? implementationAgentLabel(selectedAgent) : "実装先を選択"}
         </strong>
         <span>
           {selectedAgent === "codex"
             ? project.codexThreadId
-              ? linked?.title ?? "Codexタスク紐付け済み"
+              ? (linked?.title ?? "Codexタスク紐付け済み")
               : "送信前にCodexタスクを設定"
             : selectedAgent === "claude"
               ? detection?.claudeInstalled

@@ -12,7 +12,11 @@ export function EmptyInbox({ onAdd }: { onAdd: () => void }) {
           ひとつの受信箱で整理できます。明示的にAIレビューを実行したときだけ、
           差分がCodexの処理に送られます。
         </p>
-        <button className="primary-button primary-button--large" onClick={onAdd} type="button">
+        <button
+          className="primary-button primary-button--large"
+          onClick={onAdd}
+          type="button"
+        >
           <Icon name="add" />
           最初のプロジェクトを追加
         </button>

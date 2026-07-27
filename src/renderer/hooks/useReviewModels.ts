@@ -10,9 +10,7 @@ export function useReviewModels(canReview: boolean) {
     (effort) =>
       !selectedModelId ||
       Boolean(
-        models
-          .find((model) => model.id === selectedModelId)
-          ?.efforts.includes(effort),
+        models.find((model) => model.id === selectedModelId)?.efforts.includes(effort),
       ),
   );
 

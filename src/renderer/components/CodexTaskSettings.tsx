@@ -1,6 +1,6 @@
 import type { CodexThreadSummary, ProjectRecord } from "../../shared/contracts";
-import { formatDate } from "../lib/format";
 import type { CodexHandoffBusy } from "../hooks/useCodexHandoff";
+import { formatDate } from "../lib/format";
 import { Icon } from "./Icon";
 
 export function CodexTaskSettings({
@@ -55,9 +55,7 @@ export function CodexTaskSettings({
             onChange={(event) => void linkTask(event.target.value)}
             value={project.codexThreadId ?? ""}
           >
-            <option value="">
-              {loadingTasks ? "読み込み中…" : "タスクを選択"}
-            </option>
+            <option value="">{loadingTasks ? "読み込み中…" : "タスクを選択"}</option>
             {project.codexThreadId && !linked ? (
               <option value={project.codexThreadId}>
                 紐付け済み: {project.codexThreadId.slice(0, 13)}…
@@ -121,9 +119,7 @@ export function CodexTaskSettings({
             </div>
             <button
               className="text-button"
-              onClick={() =>
-                void window.diffender.codex.openTask(project.codexThreadId!)
-              }
+              onClick={() => void window.diffender.codex.openTask(project.codexThreadId!)}
               type="button"
             >
               <Icon name="open" size={15} />

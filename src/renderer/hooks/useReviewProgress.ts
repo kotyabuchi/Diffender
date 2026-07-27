@@ -9,9 +9,7 @@ import { progressToReviewStatus, replaceSetValue } from "../lib/review";
 export function useReviewProgress(
   setProjects: Dispatch<SetStateAction<ProjectRecord[]>>,
 ) {
-  const [busyProjectIds, setBusyProjectIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [busyProjectIds, setBusyProjectIds] = useState<Set<string>>(() => new Set());
   const [progressByProject, setProgressByProject] = useState<
     Record<string, ReviewProgressEvent>
   >({});

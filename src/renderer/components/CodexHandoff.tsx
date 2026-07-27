@@ -1,7 +1,4 @@
-import {
-  type CodexHandoffProps,
-  useCodexHandoff,
-} from "../hooks/useCodexHandoff";
+import { type CodexHandoffProps, useCodexHandoff } from "../hooks/useCodexHandoff";
 import { CodexHandoffActions } from "./CodexHandoffActions";
 import { CodexTaskSettings } from "./CodexTaskSettings";
 import { Icon } from "./Icon";

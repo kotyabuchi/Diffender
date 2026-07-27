@@ -54,10 +54,7 @@
                 },
                 "file": { "type": "string" },
                 "line": {
-                  "anyOf": [
-                    { "type": "integer", "minimum": 1 },
-                    { "type": "null" }
-                  ]
+                  "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
                 },
                 "title": { "type": "string" },
                 "reason": { "type": "string" },

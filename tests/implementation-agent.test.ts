@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { CodexStatus, ProjectRecord } from "../src/shared/contracts";
 import {
   detectImplementationAgent,
   inspectProjectAgentSignals,
 } from "../src/main/implementation-agent";
+import type { CodexStatus, ProjectRecord } from "../src/shared/contracts";
 
 const project: ProjectRecord = {
   id: "project-1",

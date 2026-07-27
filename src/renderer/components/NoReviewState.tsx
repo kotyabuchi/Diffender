@@ -47,7 +47,8 @@ export function NoReviewState({
         </button>
         {!canReview ? (
           <small>
-            レビューを実行するには、Codex CLIをインストールしてChatGPTでログインしてください。
+            レビューを実行するには、Codex
+            CLIをインストールしてChatGPTでログインしてください。
             APIキー認証はこのアプリのレビューでは利用できません。
           </small>
         ) : null}

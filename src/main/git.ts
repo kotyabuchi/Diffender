@@ -19,14 +19,12 @@ export interface CollectedDiff {
 }
 
 export async function validateRepository(selectedPath: string): Promise<string> {
-  const root = (
-    await runGit(selectedPath, ["rev-parse", "--show-toplevel"])
-  ).trim();
-  if (!isAbsolute(root)) throw new Error("Gitから有効なプロジェクトパスを取得できませんでした。");
-  const inside = (
-    await runGit(root, ["rev-parse", "--is-inside-work-tree"])
-  ).trim();
-  if (inside !== "true") throw new Error("選択したフォルダーはGitワークツリーではありません。");
+  const root = (await runGit(selectedPath, ["rev-parse", "--show-toplevel"])).trim();
+  if (!isAbsolute(root))
+    throw new Error("Gitから有効なプロジェクトパスを取得できませんでした。");
+  const inside = (await runGit(root, ["rev-parse", "--is-inside-work-tree"])).trim();
+  if (inside !== "true")
+    throw new Error("選択したフォルダーはGitワークツリーではありません。");
   return resolve(root);
 }
 
@@ -34,12 +32,12 @@ export async function refreshProject(project: ProjectRecord): Promise<ProjectRec
   const rootPath = await validateRepository(project.rootPath);
   const [branchResult, headResult, changesResult, gitDir, commonGitDir] =
     await Promise.all([
-    runGit(rootPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], true),
-    runGit(rootPath, ["rev-parse", "--verify", "HEAD"], true),
-    runGit(rootPath, ["status", "--porcelain=v1", "-z"]),
-    runGit(rootPath, ["rev-parse", "--git-dir"]),
-    runGit(rootPath, ["rev-parse", "--git-common-dir"]),
-  ]);
+      runGit(rootPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], true),
+      runGit(rootPath, ["rev-parse", "--verify", "HEAD"], true),
+      runGit(rootPath, ["status", "--porcelain=v1", "-z"]),
+      runGit(rootPath, ["rev-parse", "--git-dir"]),
+      runGit(rootPath, ["rev-parse", "--git-common-dir"]),
+    ]);
   return {
     ...project,
     rootPath,
@@ -80,13 +78,7 @@ export async function collectRepositoryDiff(rootPath: string): Promise<Collected
         "--find-renames",
         "--",
       ]),
-      runGit(rootPath, [
-        "diff",
-        "--no-ext-diff",
-        "--no-color",
-        "--find-renames",
-        "--",
-      ]),
+      runGit(rootPath, ["diff", "--no-ext-diff", "--no-color", "--find-renames", "--"]),
     ]);
     rawDiff = `${staged}\n${unstaged}`;
   }
@@ -144,10 +136,7 @@ function resolveContainedPath(rootPath: string, path: string): string {
   return candidate;
 }
 
-async function runGit(
-  cwd: string,
-  args: string[],
-): Promise<string>;
+async function runGit(cwd: string, args: string[]): Promise<string>;
 async function runGit(
   cwd: string,
   args: string[],

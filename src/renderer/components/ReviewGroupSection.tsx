@@ -4,10 +4,7 @@ import type {
   ReviewGroup,
   ReviewSnapshot,
 } from "../../shared/contracts";
-import {
-  composeSuggestionFeedbackBody,
-  feedbackScopesMatch,
-} from "../lib/review";
+import { composeSuggestionFeedbackBody, feedbackScopesMatch } from "../lib/review";
 import { FindingNote } from "./FindingNote";
 import { Icon } from "./Icon";
 import { FeedbackCard, FeedbackComposer, PatchView } from "./PatchView";
@@ -77,10 +74,7 @@ export function ReviewGroupSection({
   );
 
   return (
-    <article
-      className={`review-group review-group--${group.risk}`}
-      id={sectionId}
-    >
+    <article className={`review-group review-group--${group.risk}`} id={sectionId}>
       <header className="review-group__header">
         <div className="review-group__ordinal" aria-hidden="true">
           {String(index + 1).padStart(2, "0")}
@@ -138,7 +132,10 @@ export function ReviewGroupSection({
             );
 
             return (
-              <article className={`finding finding--${finding.severity}`} key={finding.id}>
+              <article
+                className={`finding finding--${finding.severity}`}
+                key={finding.id}
+              >
                 <div className="finding__location">
                   <RiskBadge risk={finding.severity} />
                   <span title={finding.file}>
@@ -154,12 +151,8 @@ export function ReviewGroupSection({
                     <SuggestionFeedbackButton
                       disabled={readOnly}
                       feedbackId={suggestionFeedback?.id}
-                      onAdd={() =>
-                        addGroupFeedback(feedbackScope, suggestionBody)
-                      }
-                      onRemove={(feedbackId) =>
-                        onRemoveFeedback(group.id, feedbackId)
-                      }
+                      onAdd={() => addGroupFeedback(feedbackScope, suggestionBody)}
+                      onRemove={(feedbackId) => onRemoveFeedback(group.id, feedbackId)}
                     />
                   </div>
                   <p>{finding.suggestion}</p>
@@ -180,7 +173,10 @@ export function ReviewGroupSection({
         </div>
       )}
 
-      <section className="group-feedback" aria-label={`${group.title} 全体へのフィードバック`}>
+      <section
+        className="group-feedback"
+        aria-label={`${group.title} 全体へのフィードバック`}
+      >
         <div className="section-rule">
           <span>この目的全体へのフィードバック</span>
           <span>{String(groupFeedback.length).padStart(2, "0")}</span>
@@ -195,10 +191,7 @@ export function ReviewGroupSection({
             </p>
           ) : null
         ) : (
-          <FeedbackComposer
-            onSubmit={addWholeGroupFeedback}
-            targetLabel="この目的全体"
-          />
+          <FeedbackComposer onSubmit={addWholeGroupFeedback} targetLabel="この目的全体" />
         )}
       </section>
 

@@ -1,5 +1,5 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { win32 } from "node:path";
 import type { ImplementationProgressEvent } from "../shared/contracts";
@@ -34,9 +34,7 @@ export class ClaudeRunner {
     { child: ChildProcessWithoutNullStreams; operationId: string }
   >();
 
-  constructor(
-    private readonly progress: (event: ImplementationProgressEvent) => void,
-  ) {}
+  constructor(private readonly progress: (event: ImplementationProgressEvent) => void) {}
 
   async status(): Promise<ClaudeStatus> {
     try {
@@ -57,9 +55,7 @@ export class ClaudeRunner {
       return {
         installed: true,
         version: version || null,
-        detail: version
-          ? `Claude Code ${version}`
-          : "Claude Codeを検出しました。",
+        detail: version ? `Claude Code ${version}` : "Claude Codeを検出しました。",
       };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -86,10 +82,7 @@ export class ClaudeRunner {
     const operationId = randomUUID();
     const child = spawn(
       invocation.command,
-      [
-        ...invocation.prefixArgs,
-        ...buildClaudeImplementationArgs(),
-      ],
+      [...invocation.prefixArgs, ...buildClaudeImplementationArgs()],
       {
         cwd,
         env: sanitizedClaudeEnvironment(),
@@ -111,8 +104,7 @@ export class ClaudeRunner {
       .then((output) => {
         if (output.code !== 0) {
           throw new Error(
-            briefError(output.stderr) ||
-              "Claude Codeが修正を完了できませんでした。",
+            briefError(output.stderr) || "Claude Codeが修正を完了できませんでした。",
           );
         }
         this.progress({
@@ -120,8 +112,7 @@ export class ClaudeRunner {
           agent: "claude",
           operationId,
           status: "completed",
-          message:
-            "Claude Codeの修正が完了しました。更新して差分を確認してください。",
+          message: "Claude Codeの修正が完了しました。更新して差分を確認してください。",
         });
       })
       .catch((error) => {
@@ -176,7 +167,7 @@ export function resolveClaudeInvocation(
   const fileExists = options.fileExists ?? existsSync;
   const nodeExecutable =
     options.nodeExecutable ??
-    (electron ? nodeCandidates(env).find(fileExists) ?? "node.exe" : execPath);
+    (electron ? (nodeCandidates(env).find(fileExists) ?? "node.exe") : execPath);
   const override = env.DIFFENDER_CLAUDE_PATH?.trim();
   if (override) {
     return override.toLowerCase().endsWith(".js")
@@ -206,32 +197,20 @@ function windowsExecutableCandidates(env: NodeJS.ProcessEnv): string[] {
     ...(env.USERPROFILE
       ? [win32.join(env.USERPROFILE, ".local", "bin", "claude.exe")]
       : []),
-    ...commandDirectories(env).map((directory) =>
-      win32.join(directory, "claude.exe"),
-    ),
+    ...commandDirectories(env).map((directory) => win32.join(directory, "claude.exe")),
   ];
 }
 
 function windowsScriptCandidates(env: NodeJS.ProcessEnv): string[] {
   return commandDirectories(env).map((directory) =>
-    win32.join(
-      directory,
-      "node_modules",
-      "@anthropic-ai",
-      "claude-code",
-      "cli.js",
-    ),
+    win32.join(directory, "node_modules", "@anthropic-ai", "claude-code", "cli.js"),
   );
 }
 
 function nodeCandidates(env: NodeJS.ProcessEnv): string[] {
   return [
-    ...commandDirectories(env).map((directory) =>
-      win32.join(directory, "node.exe"),
-    ),
-    ...(env.ProgramFiles
-      ? [win32.join(env.ProgramFiles, "nodejs", "node.exe")]
-      : []),
+    ...commandDirectories(env).map((directory) => win32.join(directory, "node.exe")),
+    ...(env.ProgramFiles ? [win32.join(env.ProgramFiles, "nodejs", "node.exe")] : []),
   ];
 }
 
@@ -279,29 +258,20 @@ function captureChild(
     };
     const timeout = setTimeout(() => {
       child.kill();
-      finish(() =>
-        reject(new Error("Claude Codeの処理が制限時間を超えました。")),
-      );
+      finish(() => reject(new Error("Claude Codeの処理が制限時間を超えました。")));
     }, timeoutMs);
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
       if (target === "stdout") stdout += chunk.toString("utf8");
       else stderr += chunk.toString("utf8");
-      if (
-        Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >
-        MAX_OUTPUT_BYTES
-      ) {
+      if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > MAX_OUTPUT_BYTES) {
         child.kill();
-        finish(() =>
-          reject(new Error("Claude Codeの出力が上限を超えました。")),
-        );
+        finish(() => reject(new Error("Claude Codeの出力が上限を超えました。")));
       }
     };
     child.stdout.on("data", (chunk: Buffer) => append("stdout", chunk));
     child.stderr.on("data", (chunk: Buffer) => append("stderr", chunk));
     child.once("error", (error) => finish(() => reject(error)));
-    child.once("close", (code) =>
-      finish(() => resolve({ code, stdout, stderr })),
-    );
+    child.once("close", (code) => finish(() => resolve({ code, stdout, stderr })));
     if (input === undefined) child.stdin.end();
     else child.stdin.end(input, "utf8");
   });

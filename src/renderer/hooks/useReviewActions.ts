@@ -38,9 +38,7 @@ export function useReviewActions({
   clearError: () => void;
   setProjects: Dispatch<SetStateAction<ProjectRecord[]>>;
   setBusyProjectIds: Dispatch<SetStateAction<Set<string>>>;
-  setProgressByProject: Dispatch<
-    SetStateAction<Record<string, ReviewProgressEvent>>
-  >;
+  setProgressByProject: Dispatch<SetStateAction<Record<string, ReviewProgressEvent>>>;
 }) {
   const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
@@ -170,13 +168,7 @@ export function useReviewActions({
         void cancelReview();
       });
     }
-  }, [
-    selectedProject,
-    setBusyProjectIds,
-    setProgressByProject,
-    setProjects,
-    showError,
-  ]);
+  }, [selectedProject, setBusyProjectIds, setProgressByProject, setProjects, showError]);
 
   const approveGroup = useCallback(
     async (group: ReviewGroup) => {

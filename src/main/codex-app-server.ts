@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import type {
   CodexTaskProgressEvent,
@@ -132,19 +132,11 @@ export class CodexAppServer {
   private startPromise: Promise<void> | null = null;
   private nextRequestId = 1;
   private readonly pending = new Map<number, PendingRequest>();
-  private readonly turns = new Map<
-    string,
-    { projectId: string; threadId: string }
-  >();
+  private readonly turns = new Map<string, { projectId: string; threadId: string }>();
 
-  constructor(
-    private readonly progress: (event: CodexTaskProgressEvent) => void,
-  ) {}
+  constructor(private readonly progress: (event: CodexTaskProgressEvent) => void) {}
 
-  async listThreads(
-    cwd: string,
-    includeAll = false,
-  ): Promise<CodexThreadSummary[]> {
+  async listThreads(cwd: string, includeAll = false): Promise<CodexThreadSummary[]> {
     const response = await this.request<ThreadListResponse>("thread/list", {
       limit: 60,
       sortKey: "updated_at",
@@ -229,10 +221,7 @@ export class CodexAppServer {
     this.failPending(new Error("Codex App Serverを終了しました。"));
   }
 
-  private async request<T = unknown>(
-    method: string,
-    params: JsonRecord,
-  ): Promise<T> {
+  private async request<T = unknown>(method: string, params: JsonRecord): Promise<T> {
     await this.ensureStarted();
     return this.writeRequest<T>(method, params);
   }
@@ -287,10 +276,7 @@ export class CodexAppServer {
     this.writeNotification("initialized");
   }
 
-  private writeRequest<T>(
-    method: string,
-    params: JsonRecord,
-  ): Promise<T> {
+  private writeRequest<T>(method: string, params: JsonRecord): Promise<T> {
     const child = this.child;
     if (!child || child.killed || !child.stdin.writable) {
       return Promise.reject(new Error("Codex App Serverに接続できません。"));
@@ -354,7 +340,7 @@ export class CodexAppServer {
 
   private answerServerRequest(id: number, method: string): void {
     const child = this.child;
-    if (!child || !child.stdin.writable) return;
+    if (!child?.stdin.writable) return;
     let result: JsonRecord | undefined;
     if (
       method === "item/commandExecution/requestApproval" ||
