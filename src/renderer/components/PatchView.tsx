@@ -132,6 +132,9 @@ export const FeedbackComposer = memo(function FeedbackComposer({
 }) {
   const [body, setBody] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
+  // autoFocus の入力欄はマウント直後に focus が入るので初期から展開扱いにし、
+  // 折り畳み→展開のちらつきを避ける。
+  const [focused, setFocused] = useState(autoFocus);
 
   useEffect(() => {
     setBody("");
@@ -151,24 +154,31 @@ export const FeedbackComposer = memo(function FeedbackComposer({
     }
   }, [body, disabled, onSubmit, state]);
 
+  // 未フォーカスかつ空のときは1行に折り畳み、対象ラベルと操作ボタンを隠す（Issue #13）。
+  const expanded = focused || body.trim().length > 0 || state === "saving";
+
   return (
-    <div className="feedback-composer">
-      <div className="feedback-composer__target">
-        <span aria-hidden="true">自</span>
-        <strong>{targetLabel}</strong>
-      </div>
+    <div className={`feedback-composer${expanded ? "" : " feedback-composer--collapsed"}`}>
+      {expanded ? (
+        <div className="feedback-composer__target">
+          <span aria-hidden="true">自</span>
+          <strong>{targetLabel}</strong>
+        </div>
+      ) : null}
       <textarea
         aria-label={`${targetLabel} へのフィードバック`}
         autoFocus={autoFocus}
         disabled={disabled}
         maxLength={4_000}
         onBlur={() => {
+          setFocused(false);
           if (!body.trim() && state !== "saving") onCancel?.();
         }}
         onChange={(event) => {
           setBody(event.target.value);
           setState("idle");
         }}
+        onFocus={() => setFocused(true)}
         onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();
@@ -176,31 +186,37 @@ export const FeedbackComposer = memo(function FeedbackComposer({
           }
         }}
         placeholder="実装エージェントへ伝えるフィードバックを入力"
-        rows={3}
+        rows={expanded ? 3 : 1}
         value={body}
       />
-      <div className="feedback-composer__actions">
-        <span aria-live="polite">
-          {state === "saving"
-            ? "保存中…"
-            : state === "error"
-              ? "保存できませんでした"
-              : "Ctrl / ⌘ + Enterで追加"}
-        </span>
-        {onCancel ? (
-          <button className="feedback-composer__cancel" onClick={onCancel} type="button">
-            キャンセル
+      {expanded ? (
+        <div className="feedback-composer__actions">
+          <span aria-live="polite">
+            {state === "saving"
+              ? "保存中…"
+              : state === "error"
+                ? "保存できませんでした"
+                : "Ctrl / ⌘ + Enterで追加"}
+          </span>
+          {onCancel ? (
+            <button
+              className="feedback-composer__cancel"
+              onClick={onCancel}
+              type="button"
+            >
+              キャンセル
+            </button>
+          ) : null}
+          <button
+            className="feedback-composer__submit"
+            disabled={disabled || !body.trim() || state === "saving"}
+            onClick={() => void submit()}
+            type="button"
+          >
+            フィードバックを追加
           </button>
-        ) : null}
-        <button
-          className="feedback-composer__submit"
-          disabled={disabled || !body.trim() || state === "saving"}
-          onClick={() => void submit()}
-          type="button"
-        >
-          フィードバックを追加
-        </button>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 });

@@ -11,6 +11,7 @@ export function FindingNote({
 }) {
   const [value, setValue] = useState(initialValue);
   const [savedValue, setSavedValue] = useState(initialValue);
+  const [focused, setFocused] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
@@ -33,8 +34,12 @@ export function FindingNote({
     }
   }, [onSave, saveState, savedValue, value]);
 
+  // フォーカス中・内容あり・保存中のときだけ展開する。未フォーカスかつ空なら
+  // 1行に折り畳み、保存ボタンを隠して静かな表示にする（Issue #13）。
+  const expanded = focused || value.trim().length > 0 || saveState === "saving";
+
   return (
-    <div className="finding-note">
+    <div className={`finding-note${expanded ? "" : " finding-note--collapsed"}`}>
       <div className="finding-note__heading">
         <strong>自分のメモ</strong>
         <span aria-live="polite">
@@ -51,11 +56,15 @@ export function FindingNote({
         aria-label="自分のメモ"
         disabled={readOnly}
         maxLength={4_000}
-        onBlur={() => void save()}
+        onBlur={() => {
+          setFocused(false);
+          void save();
+        }}
         onChange={(event) => {
           setValue(event.target.value);
           setSaveState("idle");
         }}
+        onFocus={() => setFocused(true)}
         onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();
@@ -63,17 +72,22 @@ export function FindingNote({
           }
         }}
         placeholder="この確認ポイントについて、判断や対応方針を記録できます"
-        rows={2}
+        rows={expanded ? 2 : 1}
         value={value}
       />
-      <button
-        className="finding-note__save"
-        disabled={readOnly || value === savedValue || saveState === "saving"}
-        onClick={() => void save()}
-        type="button"
-      >
-        メモを保存
-      </button>
+      {expanded ? (
+        <div className="finding-note__footer">
+          <span className="finding-note__hint">Ctrl / ⌘ + Enterで保存</span>
+          <button
+            className="finding-note__save"
+            disabled={readOnly || value === savedValue || saveState === "saving"}
+            onClick={() => void save()}
+            type="button"
+          >
+            メモを保存
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
