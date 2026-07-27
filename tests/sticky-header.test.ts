@@ -5,18 +5,15 @@ import {
 } from "../src/renderer/lib/sticky-header";
 
 describe("syncFileHeaderStickyOffset", () => {
-  it("publishes the rounded-up group header height for nested sticky file headers", () => {
+  it("publishes the group header bottom edge for nested sticky file headers", () => {
     const setProperty = vi.fn();
     const container = {
       style: { setProperty },
     };
-    const header = {
-      getBoundingClientRect: () => ({ height: 103.25 }),
-    };
 
-    syncFileHeaderStickyOffset(container, header);
+    syncFileHeaderStickyOffset(container, 78, 103.25);
 
-    expect(setProperty).toHaveBeenCalledWith(FILE_HEADER_STICKY_OFFSET_PROPERTY, "104px");
+    expect(setProperty).toHaveBeenCalledWith(FILE_HEADER_STICKY_OFFSET_PROPERTY, "182px");
   });
 
   it("clamps invalid or negative measurements to zero", () => {
@@ -25,12 +22,8 @@ describe("syncFileHeaderStickyOffset", () => {
       style: { setProperty },
     };
 
-    syncFileHeaderStickyOffset(container, {
-      getBoundingClientRect: () => ({ height: Number.NaN }),
-    });
-    syncFileHeaderStickyOffset(container, {
-      getBoundingClientRect: () => ({ height: -12 }),
-    });
+    syncFileHeaderStickyOffset(container, Number.NaN, Number.NaN);
+    syncFileHeaderStickyOffset(container, -78, -12);
 
     expect(setProperty).toHaveBeenNthCalledWith(
       1,

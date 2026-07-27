@@ -2260,16 +2260,14 @@ button:disabled {
 
 .patch {
   border-bottom: 1px solid var(--line);
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
 }
 
 .patch__summary {
   position: sticky;
-  top: calc(78px + var(--review-group-header-height, 0px));
+  top: var(--file-header-sticky-top, 182px);
   z-index: 6;
   display: grid;
-  min-height: 47px;
+  min-height: 36px;
   align-items: center;
   padding: 0 8px;
   list-style: none;
@@ -2355,6 +2353,12 @@ button:disabled {
   overflow: auto;
   background: #f8faf9;
   scrollbar-color: var(--line-strong) transparent;
+}
+
+.patch__viewport,
+.patch__fallback {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 .patch__table {

@@ -81,12 +81,20 @@ export function ReviewGroupSection({
     const headerElement = groupHeaderRef.current;
     if (!groupElement || !headerElement) return;
 
-    const syncOffset = () => syncFileHeaderStickyOffset(groupElement, headerElement);
+    const syncOffset = () => {
+      const stickyTop = Number.parseFloat(getComputedStyle(headerElement).top);
+      const headerHeight = headerElement.getBoundingClientRect().height;
+      syncFileHeaderStickyOffset(groupElement, stickyTop, headerHeight);
+    };
     syncOffset();
 
     const resizeObserver = new ResizeObserver(syncOffset);
     resizeObserver.observe(headerElement);
-    return () => resizeObserver.disconnect();
+    groupElement.addEventListener("contentvisibilityautostatechange", syncOffset);
+    return () => {
+      resizeObserver.disconnect();
+      groupElement.removeEventListener("contentvisibilityautostatechange", syncOffset);
+    };
   }, []);
 
   return (
