@@ -1,10 +1,11 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import type {
   ReviewFeedbackScope,
   ReviewGroup,
   ReviewSnapshot,
 } from "../../shared/contracts";
 import { composeSuggestionFeedbackBody, feedbackScopesMatch } from "../lib/review";
+import { syncFileHeaderStickyOffset } from "../lib/sticky-header";
 import { FindingNote } from "./FindingNote";
 import { Icon } from "./Icon";
 import { FeedbackCard, FeedbackComposer, PatchView } from "./PatchView";
@@ -38,6 +39,8 @@ export function ReviewGroupSection({
   ) => Promise<void>;
   onRemoveFeedback: (groupId: string, feedbackId: string) => Promise<void>;
 }) {
+  const groupRef = useRef<HTMLElement>(null);
+  const groupHeaderRef = useRef<HTMLElement>(null);
   const filesByPath = useMemo(
     () => new Map(snapshot.files.map((file) => [file.path, file])),
     [snapshot.files],
@@ -73,9 +76,26 @@ export function ReviewGroupSection({
     [addGroupFeedback],
   );
 
+  useLayoutEffect(() => {
+    const groupElement = groupRef.current;
+    const headerElement = groupHeaderRef.current;
+    if (!groupElement || !headerElement) return;
+
+    const syncOffset = () => syncFileHeaderStickyOffset(groupElement, headerElement);
+    syncOffset();
+
+    const resizeObserver = new ResizeObserver(syncOffset);
+    resizeObserver.observe(headerElement);
+    return () => resizeObserver.disconnect();
+  }, []);
+
   return (
-    <article className={`review-group review-group--${group.risk}`} id={sectionId}>
-      <header className="review-group__header">
+    <article
+      className={`review-group review-group--${group.risk}`}
+      id={sectionId}
+      ref={groupRef}
+    >
+      <header className="review-group__header" ref={groupHeaderRef}>
         <div className="review-group__ordinal" aria-hidden="true">
           {String(index + 1).padStart(2, "0")}
         </div>

@@ -2265,11 +2265,16 @@ button:disabled {
 }
 
 .patch__summary {
+  position: sticky;
+  top: calc(78px + var(--review-group-header-height, 0px));
+  z-index: 6;
   display: grid;
   min-height: 47px;
   align-items: center;
   padding: 0 8px;
   list-style: none;
+  background: var(--paper);
+  box-shadow: 0 1px 0 var(--line);
   cursor: pointer;
   grid-template-columns: 18px minmax(0, 1fr) auto auto auto auto;
   gap: 9px;
@@ -3053,6 +3058,10 @@ button:disabled {
     position: static;
     display: block;
     box-shadow: none;
+  }
+
+  .patch__summary {
+    position: static;
   }
 
   .review-group__ordinal {
