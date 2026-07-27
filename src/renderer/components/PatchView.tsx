@@ -226,6 +226,88 @@ export const FeedbackCard = memo(function FeedbackCard({
   );
 });
 
+// 差分行は選択状態など「その行に関係する」primitive props のみで描画し、
+// memo で他行の再レンダーから切り離す。大きな差分でも選択の開始／解除で
+// 全行が reconcile されないようにするため（フリーズ対策）。
+const PatchRowView = memo(function PatchRowView({
+  row,
+  rowIndex,
+  rowSelected,
+  oldSelected,
+  newSelected,
+  readOnly,
+  onBeginDrag,
+  onExtendDrag,
+}: {
+  row: PatchRow;
+  rowIndex: number;
+  rowSelected: boolean;
+  oldSelected: boolean;
+  newSelected: boolean;
+  readOnly: boolean;
+  onBeginDrag: (side: DiffSide, rowIndex: number, hunkId: number) => void;
+  onExtendDrag: (side: DiffSide, rowIndex: number, hunkId: number) => void;
+}) {
+  return (
+    <div
+      className={`patch__row patch__row--${row.kind}${rowSelected ? " patch__row--selected" : ""}`}
+    >
+      {row.oldLine === null ? (
+        <span className="patch__line-number" aria-hidden="true" />
+      ) : (
+        <button
+          aria-label={`変更前 ${row.oldLine} 行をフィードバック対象にする`}
+          className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${oldSelected ? " patch__line-number--selected" : ""}`}
+          data-feedback-side="old"
+          data-hunk-id={row.hunkId}
+          data-row-index={rowIndex}
+          disabled={readOnly}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onBeginDrag("old", rowIndex, row.hunkId);
+          }}
+          onMouseEnter={() => onExtendDrag("old", rowIndex, row.hunkId)}
+          title="ドラッグして行範囲を選択"
+          type="button"
+        >
+          {row.oldLine}
+        </button>
+      )}
+      {row.newLine === null ? (
+        <span className="patch__line-number" aria-hidden="true" />
+      ) : (
+        <button
+          aria-label={`変更後 ${row.newLine} 行をフィードバック対象にする`}
+          className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${newSelected ? " patch__line-number--selected" : ""}`}
+          data-feedback-side="new"
+          data-hunk-id={row.hunkId}
+          data-row-index={rowIndex}
+          disabled={readOnly}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onBeginDrag("new", rowIndex, row.hunkId);
+          }}
+          onMouseEnter={() => onExtendDrag("new", rowIndex, row.hunkId)}
+          title="ドラッグして行範囲を選択"
+          type="button"
+        >
+          {row.newLine}
+        </button>
+      )}
+      <span className="patch__marker" aria-hidden="true">
+        {row.kind === "addition"
+          ? "+"
+          : row.kind === "deletion"
+            ? "−"
+            : row.kind === "hunk"
+              ? "…"
+              : ""}
+      </span>
+      <code className="patch__code">{row.content || " "}</code>
+    </div>
+  );
+});
+
 function lineForSide(row: PatchRow, side: DiffSide): number | null {
   return side === "new" ? row.newLine : row.oldLine;
 }
@@ -455,62 +537,16 @@ export const PatchView = memo(function PatchView({
               );
               return (
                 <Fragment key={row.id}>
-                  <div
-                    className={`patch__row patch__row--${row.kind}${rowSelected ? " patch__row--selected" : ""}`}
-                  >
-                    {row.oldLine === null ? (
-                      <span className="patch__line-number" aria-hidden="true" />
-                    ) : (
-                      <button
-                        aria-label={`変更前 ${row.oldLine} 行をフィードバック対象にする`}
-                        className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${selection?.side === "old" && rowSelected ? " patch__line-number--selected" : ""}`}
-                        data-feedback-side="old"
-                        data-hunk-id={row.hunkId}
-                        data-row-index={rowIndex}
-                        disabled={readOnly}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          beginDrag("old", rowIndex, row.hunkId);
-                        }}
-                        onMouseEnter={() => extendDrag("old", rowIndex, row.hunkId)}
-                        title="ドラッグして行範囲を選択"
-                        type="button"
-                      >
-                        {row.oldLine}
-                      </button>
-                    )}
-                    {row.newLine === null ? (
-                      <span className="patch__line-number" aria-hidden="true" />
-                    ) : (
-                      <button
-                        aria-label={`変更後 ${row.newLine} 行をフィードバック対象にする`}
-                        className={`patch__line-number${readOnly ? "" : " patch__line-number--selectable"}${selection?.side === "new" && rowSelected ? " patch__line-number--selected" : ""}`}
-                        data-feedback-side="new"
-                        data-hunk-id={row.hunkId}
-                        data-row-index={rowIndex}
-                        disabled={readOnly}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          beginDrag("new", rowIndex, row.hunkId);
-                        }}
-                        onMouseEnter={() => extendDrag("new", rowIndex, row.hunkId)}
-                        title="ドラッグして行範囲を選択"
-                        type="button"
-                      >
-                        {row.newLine}
-                      </button>
-                    )}
-                    <span className="patch__marker" aria-hidden="true">
-                      {row.kind === "addition"
-                        ? "+"
-                        : row.kind === "deletion"
-                          ? "−"
-                          : row.kind === "hunk"
-                            ? "…"
-                            : ""}
-                    </span>
-                    <code className="patch__code">{row.content || " "}</code>
-                  </div>
+                  <PatchRowView
+                    newSelected={selection?.side === "new" && rowSelected}
+                    oldSelected={selection?.side === "old" && rowSelected}
+                    onBeginDrag={beginDrag}
+                    onExtendDrag={extendDrag}
+                    readOnly={readOnly}
+                    row={row}
+                    rowIndex={rowIndex}
+                    rowSelected={rowSelected}
+                  />
                   {rowFeedback.map((item) => (
                     <FeedbackCard
                       feedback={item}
