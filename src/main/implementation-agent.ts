@@ -4,7 +4,7 @@ import type {
   CodexStatus,
   ImplementationAgent,
   ImplementationAgentDetection,
-  ProjectRecord,
+  WorktreeRecord,
 } from "../shared/contracts";
 import type { ClaudeStatus } from "./claude";
 
@@ -30,7 +30,7 @@ export function inspectProjectAgentSignals(
 }
 
 export function detectImplementationAgent(
-  project: ProjectRecord,
+  project: WorktreeRecord,
   codexStatus: CodexStatus,
   claudeStatus: ClaudeStatus,
   signals: ProjectAgentSignals = inspectProjectAgentSignals(project.rootPath),

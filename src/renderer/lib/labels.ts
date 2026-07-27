@@ -1,8 +1,8 @@
 import type {
-  ProjectRecord,
   ReviewEffort,
   ReviewProgressEvent,
   RiskLevel,
+  WorktreeRecord,
 } from "../../shared/contracts";
 
 export const RISK_LABELS: Record<RiskLevel, string> = {
@@ -19,7 +19,7 @@ export const EFFORT_LABELS: Record<ReviewEffort, string> = {
   xhigh: "最高",
 };
 
-export const REVIEW_STATUS_LABELS: Record<ProjectRecord["reviewStatus"], string> = {
+export const REVIEW_STATUS_LABELS: Record<WorktreeRecord["reviewStatus"], string> = {
   idle: "未レビュー",
   stale: "要更新",
   queued: "待機中",

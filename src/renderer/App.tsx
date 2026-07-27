@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CodexStatus, ProjectRecord } from "../shared/contracts";
+import type { CodexStatus, RepositoryRecord, WorktreeRecord } from "../shared/contracts";
 import { EmptyInbox } from "./components/EmptyInbox";
 import { ErrorNotice } from "./components/ErrorNotice";
 import { LoadingWorkspace } from "./components/LoadingWorkspace";
+import { MissingWorktreeNotice } from "./components/MissingWorktreeNotice";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProjectToolbar } from "./components/ProjectToolbar";
 import { ReviewOverviewHeader } from "./components/ReviewOverviewHeader";
@@ -12,18 +13,18 @@ import { useReviewActions } from "./hooks/useReviewActions";
 import { useReviewModels } from "./hooks/useReviewModels";
 import { useReviewProgress } from "./hooks/useReviewProgress";
 import { type ErrorState, getErrorMessage } from "./lib/error";
+import { defaultWorktreeId, findWorktree, updateWorktree } from "./lib/repositories";
 
 export function App() {
-  const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [repositories, setRepositories] = useState<RepositoryRecord[]>([]);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
-  const selectedProjectIdRef = useRef<string | null>(null);
+  const selectedWorktreeIdRef = useRef<string | null>(null);
 
-  const selectedProject =
-    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedWorktree = findWorktree(repositories, selectedWorktreeId);
   const canReview = Boolean(
     codexStatus?.installed &&
       codexStatus.authenticated &&
@@ -50,12 +51,12 @@ export function App() {
     progressByProject,
     setProgressByProject,
     taskProgressByProject,
-  } = useReviewProgress(setProjects);
+  } = useReviewProgress(setRepositories);
 
-  const selectedProgress = selectedProjectId
-    ? progressByProject[selectedProjectId]
+  const selectedProgress = selectedWorktreeId
+    ? progressByProject[selectedWorktreeId]
     : undefined;
-  const isReviewing = selectedProjectId ? busyProjectIds.has(selectedProjectId) : false;
+  const isReviewing = selectedWorktreeId ? busyProjectIds.has(selectedWorktreeId) : false;
 
   const {
     snapshot,
@@ -69,14 +70,14 @@ export function App() {
     addFeedback,
     removeFeedback,
   } = useReviewActions({
-    selectedProject,
-    selectedProjectId,
-    selectedProjectIdRef,
+    selectedProject: selectedWorktree,
+    selectedProjectId: selectedWorktreeId,
+    selectedProjectIdRef: selectedWorktreeIdRef,
     selectedModelId,
     selectedEffort,
     showError,
     clearError,
-    setProjects,
+    setProjects: setRepositories,
     setBusyProjectIds,
     setProgressByProject,
   });
@@ -91,17 +92,17 @@ export function App() {
           window.diffender.codex.status(),
         ]);
         if (!active) return;
-        setProjects(projectList);
+        setRepositories(projectList);
         setCodexStatus(status);
-        setSelectedProjectId((current) => {
-          if (current && projectList.some((project) => project.id === current)) {
+        setSelectedWorktreeId((current) => {
+          if (findWorktree(projectList, current)) {
             return current;
           }
-          return projectList[0]?.id ?? null;
+          return defaultWorktreeId(projectList);
         });
       } catch (caught) {
         if (active) {
-          showError("受信箱を開けませんでした", caught, () => {
+          showError("ワークスペースを開けませんでした", caught, () => {
             window.location.reload();
           });
         }
@@ -117,8 +118,8 @@ export function App() {
   }, [showError]);
 
   useEffect(() => {
-    selectedProjectIdRef.current = selectedProjectId;
-  }, [selectedProjectId]);
+    selectedWorktreeIdRef.current = selectedWorktreeId;
+  }, [selectedWorktreeId]);
 
   const refreshProjects = useCallback(async () => {
     setRefreshing(true);
@@ -128,13 +129,15 @@ export function App() {
         window.diffender.projects.refresh(),
         window.diffender.codex.status(),
       ]);
-      setProjects(projectList);
+      setRepositories(projectList);
       setCodexStatus(status);
-      const current = selectedProjectIdRef.current;
-      if (current && projectList.some((project) => project.id === current)) {
-        await loadSnapshot(current);
+      const current = selectedWorktreeIdRef.current;
+      const currentWorktree = findWorktree(projectList, current);
+      if (current && currentWorktree) {
+        // 削除済み worktree はレビューを読み込まない（専用表示にする）。
+        if (!currentWorktree.missing) await loadSnapshot(current);
       } else {
-        setSelectedProjectId(projectList[0]?.id ?? null);
+        setSelectedWorktreeId(defaultWorktreeId(projectList));
       }
     } catch (caught) {
       showError("プロジェクトを更新できませんでした", caught, () => {
@@ -148,13 +151,10 @@ export function App() {
   const addProject = useCallback(async () => {
     setError(null);
     try {
-      const project = await window.diffender.projects.add();
-      if (!project) return;
-      setProjects((previous) => [
-        project,
-        ...previous.filter((item) => item.id !== project.id),
-      ]);
-      setSelectedProjectId(project.id);
+      const result = await window.diffender.projects.add();
+      if (!result) return;
+      setRepositories(result.repositories);
+      setSelectedWorktreeId(result.addedWorktreeId);
     } catch (caught) {
       showError("プロジェクトを追加できませんでした", caught, () => {
         void addProject();
@@ -163,33 +163,30 @@ export function App() {
   }, [showError]);
 
   const removeProject = useCallback(
-    async (project: ProjectRecord) => {
+    async (worktree: WorktreeRecord) => {
       const confirmed = window.confirm(
-        `「${project.name}」を受信箱から削除しますか？\nプロジェクトのファイル自体は削除されません。`,
+        `「${worktree.name}」をワークスペースから削除しますか？\nワークツリーのファイル自体は削除されません。`,
       );
       if (!confirmed) return;
 
       setError(null);
       try {
-        await window.diffender.projects.remove(project.id);
-        const remaining = projects.filter((item) => item.id !== project.id);
-        setProjects(remaining);
-        if (selectedProjectIdRef.current === project.id) {
-          setSelectedProjectId(remaining[0]?.id ?? null);
+        const remaining = await window.diffender.projects.remove(worktree.id);
+        setRepositories(remaining);
+        if (!findWorktree(remaining, selectedWorktreeIdRef.current)) {
+          setSelectedWorktreeId(defaultWorktreeId(remaining));
         }
       } catch (caught) {
-        showError("プロジェクトを受信箱から削除できませんでした", caught, () => {
-          void removeProject(project);
+        showError("プロジェクトをワークスペースから削除できませんでした", caught, () => {
+          void removeProject(worktree);
         });
       }
     },
-    [projects, showError],
+    [showError],
   );
 
-  const updateProject = useCallback((updated: ProjectRecord) => {
-    setProjects((previous) =>
-      previous.map((project) => (project.id === updated.id ? updated : project)),
-    );
+  const updateProject = useCallback((updated: WorktreeRecord) => {
+    setRepositories((previous) => updateWorktree(previous, updated.id, () => updated));
   }, []);
 
   return (
@@ -205,9 +202,9 @@ export function App() {
       {initializing ? (
         <div className="loading-screen">
           <span className="progress-panel__spinner" />
-          受信箱を準備しています
+          ワークスペースを準備しています
         </div>
-      ) : projects.length === 0 ? (
+      ) : repositories.length === 0 ? (
         <>
           {error ? (
             <div className="global-error">
@@ -220,10 +217,11 @@ export function App() {
         <div className="desk-layout">
           <ProjectSidebar
             onRemove={(project) => void removeProject(project)}
-            onSelect={(projectId) => setSelectedProjectId(projectId)}
+            onSelect={(worktreeId) => setSelectedWorktreeId(worktreeId)}
+            onWorktreesRegistered={setRepositories}
             progressByProject={progressByProject}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
+            repositories={repositories}
+            selectedWorktreeId={selectedWorktreeId}
           />
 
           <main className="main-pane">
@@ -231,49 +229,56 @@ export function App() {
               <ErrorNotice error={error} onDismiss={() => setError(null)} />
             ) : null}
 
-            {selectedProject ? (
-              <>
-                {snapshot ? (
-                  <ReviewOverviewHeader
+            {selectedWorktree ? (
+              selectedWorktree.missing ? (
+                <MissingWorktreeNotice
+                  onRemove={() => void removeProject(selectedWorktree)}
+                  worktree={selectedWorktree}
+                />
+              ) : (
+                <>
+                  {snapshot ? (
+                    <ReviewOverviewHeader
+                      snapshot={snapshot}
+                      stale={selectedWorktree.reviewStatus === "stale"}
+                    />
+                  ) : null}
+
+                  <ProjectToolbar
+                    canReview={canReview}
+                    effortOptions={effortOptions}
+                    isReviewing={isReviewing}
+                    models={models}
+                    onCancel={() => void cancelReview()}
+                    onRun={() => void runReview()}
+                    project={selectedWorktree}
+                    selectedEffort={selectedEffort}
+                    selectedModelId={selectedModelId}
+                    setSelectedEffort={setSelectedEffort}
+                    setSelectedModelId={setSelectedModelId}
                     snapshot={snapshot}
-                    stale={selectedProject.reviewStatus === "stale"}
                   />
-                ) : null}
 
-                <ProjectToolbar
-                  canReview={canReview}
-                  effortOptions={effortOptions}
-                  isReviewing={isReviewing}
-                  models={models}
-                  onCancel={() => void cancelReview()}
-                  onRun={() => void runReview()}
-                  project={selectedProject}
-                  selectedEffort={selectedEffort}
-                  selectedModelId={selectedModelId}
-                  setSelectedEffort={setSelectedEffort}
-                  setSelectedModelId={setSelectedModelId}
-                  snapshot={snapshot}
-                />
-
-                <ReviewWorkspace
-                  approvalPending={approvalPending}
-                  canReview={canReview}
-                  isReviewing={isReviewing}
-                  onAddFeedback={addFeedback}
-                  onApprove={approveGroup}
-                  onCancel={cancelReview}
-                  onError={(title, caught) => showError(title, caught)}
-                  onProjectUpdated={updateProject}
-                  onRemoveFeedback={removeFeedback}
-                  onRun={() => void runReview()}
-                  onSaveFindingNote={saveFindingNote}
-                  project={selectedProject}
-                  selectedProgress={selectedProgress}
-                  snapshot={snapshot}
-                  snapshotLoading={snapshotLoading}
-                  taskProgress={taskProgressByProject[selectedProject.id]}
-                />
-              </>
+                  <ReviewWorkspace
+                    approvalPending={approvalPending}
+                    canReview={canReview}
+                    isReviewing={isReviewing}
+                    onAddFeedback={addFeedback}
+                    onApprove={approveGroup}
+                    onCancel={cancelReview}
+                    onError={(title, caught) => showError(title, caught)}
+                    onProjectUpdated={updateProject}
+                    onRemoveFeedback={removeFeedback}
+                    onRun={() => void runReview()}
+                    onSaveFindingNote={saveFindingNote}
+                    project={selectedWorktree}
+                    selectedProgress={selectedProgress}
+                    snapshot={snapshot}
+                    snapshotLoading={snapshotLoading}
+                    taskProgress={taskProgressByProject[selectedWorktree.id]}
+                  />
+                </>
+              )
             ) : (
               <LoadingWorkspace />
             )}

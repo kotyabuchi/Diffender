@@ -2,7 +2,7 @@ import type {
   CodexThreadSummary,
   ImplementationAgent,
   ImplementationAgentDetection,
-  ProjectRecord,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { implementationAgentLabel } from "../lib/review";
 
@@ -14,7 +14,7 @@ export function ImplementationAgentCard({
 }: {
   selectedAgent: ImplementationAgent | null;
   detection: ImplementationAgentDetection | null;
-  project: ProjectRecord;
+  project: WorktreeRecord;
   linked: CodexThreadSummary | undefined;
 }) {
   return (

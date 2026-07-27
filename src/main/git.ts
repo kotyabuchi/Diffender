@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
-import type { DiffFile, ProjectRecord } from "../shared/contracts";
+import type { DiffFile, WorktreeRecord } from "../shared/contracts";
 import { computeDiffHash, createUntrackedDiff, parseGitDiff } from "./diff";
 
 const execFileAsync = promisify(execFile);
@@ -18,6 +18,63 @@ export interface CollectedDiff {
   deletions: number;
 }
 
+export interface WorktreeListEntry {
+  rootPath: string;
+  branch: string | null;
+  headSha: string | null;
+  isMain: boolean;
+  isBare: boolean;
+  locked: boolean;
+  detached: boolean;
+}
+
+export function parseWorktreeList(porcelain: string): WorktreeListEntry[] {
+  const records = porcelain
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .filter((record) => record.trim().length > 0);
+
+  const entries: WorktreeListEntry[] = [];
+  records.forEach((record, recordIndex) => {
+    let rootPath: string | null = null;
+    let branch: string | null = null;
+    let headSha: string | null = null;
+    let isBare = false;
+    let locked = false;
+    let detached = false;
+
+    for (const line of record.split("\n")) {
+      if (line.startsWith("worktree ")) {
+        rootPath = resolve(line.slice("worktree ".length));
+      } else if (line.startsWith("HEAD ")) {
+        headSha = line.slice("HEAD ".length) || null;
+      } else if (line.startsWith("branch refs/heads/")) {
+        branch = line.slice("branch refs/heads/".length) || null;
+      } else if (line === "bare") {
+        isBare = true;
+      } else if (line === "locked" || line.startsWith("locked ")) {
+        locked = true;
+      } else if (line === "detached") {
+        detached = true;
+        branch = null;
+      }
+    }
+
+    if (!rootPath) return;
+    entries.push({
+      rootPath,
+      branch,
+      headSha,
+      isMain: recordIndex === 0,
+      isBare,
+      locked,
+      detached,
+    });
+  });
+
+  return entries;
+}
+
 export async function validateRepository(selectedPath: string): Promise<string> {
   const root = (await runGit(selectedPath, ["rev-parse", "--show-toplevel"])).trim();
   if (!isAbsolute(root))
@@ -28,29 +85,87 @@ export async function validateRepository(selectedPath: string): Promise<string> 
   return resolve(root);
 }
 
-export async function refreshProject(project: ProjectRecord): Promise<ProjectRecord> {
-  const rootPath = await validateRepository(project.rootPath);
-  const [branchResult, headResult, changesResult, gitDir, commonGitDir] =
-    await Promise.all([
-      runGit(rootPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], true),
-      runGit(rootPath, ["rev-parse", "--verify", "HEAD"], true),
-      runGit(rootPath, ["status", "--porcelain=v1", "-z"]),
-      runGit(rootPath, ["rev-parse", "--git-dir"]),
-      runGit(rootPath, ["rev-parse", "--git-common-dir"]),
-    ]);
+export async function describeRepository(
+  rootPath: string,
+): Promise<{ repositoryKey: string; isMain: boolean }> {
+  const [gitDir, commonGitDir] = await Promise.all([
+    runGit(rootPath, ["rev-parse", "--git-dir"]),
+    runGit(rootPath, ["rev-parse", "--git-common-dir"]),
+  ]);
+  const resolvedGitDir = resolve(rootPath, gitDir.trim()).toLowerCase();
+  const repositoryKey = resolve(rootPath, commonGitDir.trim()).toLowerCase();
   return {
-    ...project,
+    repositoryKey,
+    isMain: resolvedGitDir === repositoryKey,
+  };
+}
+
+export async function listWorktrees(rootPath: string): Promise<WorktreeListEntry[]> {
+  return parseWorktreeList(await runGit(rootPath, ["worktree", "list", "--porcelain"]));
+}
+
+/**
+ * リポジトリ情報の解決結果。移行・再統合が「一時的な失敗」で恒久的に誤ったグループ化を
+ * 確定させないよう、`missing`（パスが存在しない＝恒久的）と `error`（Git の予期しない
+ * 失敗＝一時的な可能性があり再試行に値する）を区別する。
+ */
+export type RepositoryResolution =
+  | { status: "resolved"; repositoryKey: string; isMain: boolean }
+  | { status: "missing" }
+  | { status: "error" };
+
+/**
+ * パスの状態。`stat` の全例外を「不在」に丸めると、権限不足やネットワークドライブの
+ * 一時障害・I/O エラーまで削除済みと誤判定してしまう。不在を明確に示す `ENOENT`/`ENOTDIR`
+ * のみ `absent` とし、それ以外の例外は `error`（復旧可能な可能性があり状態を変えず再試行）
+ * として扱う。
+ */
+export type PathState = "exists" | "absent" | "error";
+
+export async function checkPath(target: string): Promise<PathState> {
+  try {
+    await stat(target);
+    return "exists";
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" ? "absent" : "error";
+  }
+}
+
+export async function resolveRepositoryInfo(
+  rootPath: string,
+): Promise<RepositoryResolution> {
+  const pathState = await checkPath(rootPath);
+  if (pathState === "absent") return { status: "missing" };
+  if (pathState === "error") return { status: "error" };
+  try {
+    const info = await describeRepository(rootPath);
+    if (!info.repositoryKey) return { status: "error" };
+    return { status: "resolved", repositoryKey: info.repositoryKey, isMain: info.isMain };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+export async function refreshProject(worktree: WorktreeRecord): Promise<WorktreeRecord> {
+  const rootPath = await validateRepository(worktree.rootPath);
+  const [branchResult, headResult, changesResult, repository] = await Promise.all([
+    runGit(rootPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], true),
+    runGit(rootPath, ["rev-parse", "--verify", "HEAD"], true),
+    runGit(rootPath, ["status", "--porcelain=v1", "-z"]),
+    describeRepository(rootPath),
+  ]);
+  return {
+    ...worktree,
     rootPath,
     branch: branchResult.ok ? branchResult.stdout.trim() || null : null,
     headSha: headResult.ok ? headResult.stdout.trim() || null : null,
-    isWorktree:
-      resolve(rootPath, gitDir.trim()).toLowerCase() !==
-      resolve(rootPath, commonGitDir.trim()).toLowerCase(),
+    isMain: repository.isMain,
     hasChanges: changesResult.length > 0,
     reviewStatus:
       changesResult.length === 0
         ? "idle"
-        : project.reviewStatus === "running"
+        : worktree.reviewStatus === "running"
           ? "running"
           : "stale",
   };

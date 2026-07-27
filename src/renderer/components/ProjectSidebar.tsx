@@ -1,36 +1,69 @@
-import type { ProjectRecord, ReviewProgressEvent } from "../../shared/contracts";
+import type {
+  RepositoryRecord,
+  ReviewProgressEvent,
+  WorktreeRecord,
+} from "../../shared/contracts";
 import { ProjectItem } from "./ProjectItem";
+import { WorktreeDetector } from "./WorktreeDetector";
 
 export function ProjectSidebar({
-  projects,
-  selectedProjectId,
+  repositories,
+  selectedWorktreeId,
   progressByProject,
   onSelect,
   onRemove,
+  onWorktreesRegistered,
 }: {
-  projects: ProjectRecord[];
-  selectedProjectId: string | null;
+  repositories: RepositoryRecord[];
+  selectedWorktreeId: string | null;
   progressByProject: Record<string, ReviewProgressEvent>;
-  onSelect: (projectId: string) => void;
-  onRemove: (project: ProjectRecord) => void;
+  onSelect: (worktreeId: string) => void;
+  onRemove: (worktree: WorktreeRecord) => void;
+  onWorktreesRegistered: (repositories: RepositoryRecord[]) => void;
 }) {
+  const worktreeCount = repositories.reduce(
+    (count, repository) => count + repository.worktrees.length,
+    0,
+  );
+
   return (
-    <aside className="sidebar" aria-label="プロジェクト">
+    <aside className="sidebar" aria-label="リポジトリ">
       <div className="sidebar__heading">
-        <span>プロジェクト</span>
-        <span>{String(projects.length).padStart(2, "0")}</span>
+        <span>リポジトリ</span>
+        <span title={`${worktreeCount}ワークツリー`}>
+          {String(repositories.length).padStart(2, "0")}
+        </span>
       </div>
-      <nav className="project-list">
-        {projects.map((project) => (
-          <ProjectItem
-            key={project.id}
-            onRemove={() => onRemove(project)}
-            onSelect={() => onSelect(project.id)}
-            progress={progressByProject[project.id]}
-            project={project}
-            selected={project.id === selectedProjectId}
-          />
-        ))}
+      <nav className="project-list" aria-label="登録済みリポジトリとワークツリー">
+        {repositories.map((repository) => {
+          const worktrees = [...repository.worktrees].sort(
+            (left, right) => Number(right.isMain) - Number(left.isMain),
+          );
+          return (
+            <section
+              aria-label={`${repository.name}、${worktrees.length}ワークツリー`}
+              className="repository-tree"
+              key={repository.id}
+            >
+              <WorktreeDetector
+                onRegistered={onWorktreesRegistered}
+                repository={repository}
+              />
+              <div className="repository-tree__worktrees">
+                {worktrees.map((worktree) => (
+                  <ProjectItem
+                    key={worktree.id}
+                    onRemove={() => onRemove(worktree)}
+                    onSelect={() => onSelect(worktree.id)}
+                    progress={progressByProject[worktree.id]}
+                    project={worktree}
+                    selected={worktree.id === selectedWorktreeId}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </nav>
     </aside>
   );

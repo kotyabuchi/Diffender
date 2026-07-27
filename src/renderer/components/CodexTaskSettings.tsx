@@ -1,4 +1,4 @@
-import type { CodexThreadSummary, ProjectRecord } from "../../shared/contracts";
+import type { CodexThreadSummary, WorktreeRecord } from "../../shared/contracts";
 import type { CodexHandoffBusy } from "../hooks/useCodexHandoff";
 import { formatDate } from "../lib/format";
 import { Icon } from "./Icon";
@@ -19,7 +19,7 @@ export function CodexTaskSettings({
   setIncludeAll,
   setManualThreadId,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   tasks: CodexThreadSummary[];
   linked: CodexThreadSummary | undefined;
   loadingTasks: boolean;

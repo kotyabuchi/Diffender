@@ -7,14 +7,16 @@ import {
   useState,
 } from "react";
 import type {
-  ProjectRecord,
+  RepositoryRecord,
   ReviewEffort,
   ReviewFeedbackScope,
   ReviewGroup,
   ReviewProgressEvent,
   ReviewRunOptions,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
+import { updateWorktree } from "../lib/repositories";
 import { replaceSetValue } from "../lib/review";
 
 export function useReviewActions({
@@ -29,14 +31,14 @@ export function useReviewActions({
   setBusyProjectIds,
   setProgressByProject,
 }: {
-  selectedProject: ProjectRecord | null;
+  selectedProject: WorktreeRecord | null;
   selectedProjectId: string | null;
   selectedProjectIdRef: { current: string | null };
   selectedModelId: string | null;
   selectedEffort: ReviewEffort | null;
   showError: (title: string, caught: unknown, retry?: () => void) => void;
   clearError: () => void;
-  setProjects: Dispatch<SetStateAction<ProjectRecord[]>>;
+  setProjects: Dispatch<SetStateAction<RepositoryRecord[]>>;
   setBusyProjectIds: Dispatch<SetStateAction<Set<string>>>;
   setProgressByProject: Dispatch<SetStateAction<Record<string, ReviewProgressEvent>>>;
 }) {
@@ -68,15 +70,17 @@ export function useReviewActions({
     [showError],
   );
 
+  const selectedMissing = selectedProject?.missing === true;
   useEffect(() => {
-    if (!selectedProjectId) {
+    // 削除済み worktree はレビューを読み込まない（呼ぶとパス不在でエラーになる）。
+    if (!selectedProjectId || selectedMissing) {
       snapshotRequest.current += 1;
       setSnapshot(null);
       setSnapshotLoading(false);
       return;
     }
     void loadSnapshot(selectedProjectId);
-  }, [loadSnapshot, selectedProjectId]);
+  }, [loadSnapshot, selectedProjectId, selectedMissing]);
 
   const runReview = useCallback(async () => {
     if (!selectedProject) return;
@@ -93,9 +97,10 @@ export function useReviewActions({
       },
     }));
     setProjects((previous) =>
-      previous.map((project) =>
-        project.id === projectId ? { ...project, reviewStatus: "queued" } : project,
-      ),
+      updateWorktree(previous, projectId, (worktree) => ({
+        ...worktree,
+        reviewStatus: "queued",
+      })),
     );
 
     try {
@@ -109,15 +114,11 @@ export function useReviewActions({
       const review = await window.diffender.reviews.run(projectId, options);
       if (selectedProjectIdRef.current === projectId) setSnapshot(review);
       setProjects((previous) =>
-        previous.map((project) =>
-          project.id === projectId
-            ? {
-                ...project,
-                reviewStatus: "complete",
-                lastReviewedAt: review.createdAt,
-              }
-            : project,
-        ),
+        updateWorktree(previous, projectId, (worktree) => ({
+          ...worktree,
+          reviewStatus: "complete",
+          lastReviewedAt: review.createdAt,
+        })),
       );
       try {
         const refreshed = await window.diffender.projects.refresh(projectId);
@@ -127,9 +128,10 @@ export function useReviewActions({
       }
     } catch (caught) {
       setProjects((previous) =>
-        previous.map((project) =>
-          project.id === projectId ? { ...project, reviewStatus: "failed" } : project,
-        ),
+        updateWorktree(previous, projectId, (worktree) => ({
+          ...worktree,
+          reviewStatus: "failed",
+        })),
       );
       showError("AIレビューを完了できませんでした", caught, () => {
         void runReview();

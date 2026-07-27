@@ -1,8 +1,8 @@
 import type {
-  ProjectRecord,
   ReviewEffort,
   ReviewModel,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { formatDate, shortPath } from "../lib/format";
 import { EFFORT_LABELS } from "../lib/labels";
@@ -22,7 +22,7 @@ export function ProjectToolbar({
   onCancel,
   onRun,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   snapshot: ReviewSnapshot | null;
   isReviewing: boolean;
   canReview: boolean;
@@ -48,7 +48,7 @@ export function ProjectToolbar({
             <Icon name="branch" size={15} />
             {project.branch ?? "ブランチ不明"}
           </span>
-          {project.isWorktree ? <span>ワークツリー</span> : null}
+          <span>{project.isMain ? "メイン" : "ワークツリー"}</span>
         </div>
       </div>
       <div className="project-toolbar__review">

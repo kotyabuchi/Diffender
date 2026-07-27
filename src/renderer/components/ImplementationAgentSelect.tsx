@@ -1,7 +1,7 @@
 import type {
   ImplementationAgent,
   ImplementationAgentDetection,
-  ProjectRecord,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { implementationAgentLabel } from "../lib/review";
 
@@ -11,7 +11,7 @@ export function ImplementationAgentSelect({
   disabled,
   onSelectAgent,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   detection: ImplementationAgentDetection | null;
   disabled: boolean;
   onSelectAgent: (agent: ImplementationAgent | null) => void;

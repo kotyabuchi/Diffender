@@ -1,13 +1,14 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import type {
   ImplementationProgressEvent,
-  ProjectRecord,
+  RepositoryRecord,
   ReviewProgressEvent,
 } from "../../shared/contracts";
+import { updateWorktree } from "../lib/repositories";
 import { progressToReviewStatus, replaceSetValue } from "../lib/review";
 
 export function useReviewProgress(
-  setProjects: Dispatch<SetStateAction<ProjectRecord[]>>,
+  setProjects: Dispatch<SetStateAction<RepositoryRecord[]>>,
 ) {
   const [busyProjectIds, setBusyProjectIds] = useState<Set<string>>(() => new Set());
   const [progressByProject, setProgressByProject] = useState<
@@ -24,11 +25,10 @@ export function useReviewProgress(
         [event.projectId]: event,
       }));
       setProjects((previous) =>
-        previous.map((project) =>
-          project.id === event.projectId
-            ? { ...project, reviewStatus: progressToReviewStatus(event.stage) }
-            : project,
-        ),
+        updateWorktree(previous, event.projectId, (worktree) => ({
+          ...worktree,
+          reviewStatus: progressToReviewStatus(event.stage),
+        })),
       );
       setBusyProjectIds((previous) =>
         replaceSetValue(

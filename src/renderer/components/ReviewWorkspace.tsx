@@ -1,10 +1,10 @@
 import type {
   ImplementationProgressEvent,
-  ProjectRecord,
   ReviewFeedbackScope,
   ReviewGroup,
   ReviewProgressEvent,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { CodexHandoff } from "./CodexHandoff";
 import { LoadingWorkspace } from "./LoadingWorkspace";
@@ -30,7 +30,7 @@ export function ReviewWorkspace({
   onProjectUpdated,
   onError,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   snapshot: ReviewSnapshot | null;
   isReviewing: boolean;
   snapshotLoading: boolean;
@@ -48,7 +48,7 @@ export function ReviewWorkspace({
     body: string,
   ) => Promise<void>;
   onRemoveFeedback: (groupId: string, feedbackId: string) => Promise<void>;
-  onProjectUpdated: (project: ProjectRecord) => void;
+  onProjectUpdated: (project: WorktreeRecord) => void;
   onError: (title: string, error: unknown) => void;
 }) {
   return (

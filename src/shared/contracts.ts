@@ -21,18 +21,49 @@ export type ReviewStatus =
   | "failed";
 export type ImplementationAgent = "codex" | "claude";
 
-export interface ProjectRecord {
+export interface WorktreeRecord {
   id: string;
+  repositoryId: string;
   name: string;
   rootPath: string;
   codexThreadId?: string | null;
   implementationAgent?: ImplementationAgent | null;
   branch: string | null;
   headSha: string | null;
-  isWorktree: boolean;
+  isMain: boolean;
   hasChanges: boolean;
   reviewStatus: ReviewStatus;
   lastReviewedAt: string | null;
+  /**
+   * 状態移行時にリポジトリ情報を確定できず、暫定的に単独リポジトリへ置いた worktree。
+   * 後続の起動でリポジトリ情報を再解決し、成功すれば本来のリポジトリへ再統合する。
+   */
+  tentative?: boolean;
+  /**
+   * 登録済みだが作業フォルダーがディスク上に存在しない（削除された）worktree。
+   * エラーではなく「削除済み」として扱い、レビューは読み込まない。
+   */
+  missing?: boolean;
+}
+
+export interface RepositoryRecord {
+  id: string;
+  name: string;
+  repositoryKey: string;
+  worktrees: WorktreeRecord[];
+}
+
+export interface AddProjectResult {
+  repositories: RepositoryRecord[];
+  addedWorktreeId: string;
+}
+
+export interface DetectedWorktree {
+  rootPath: string;
+  branch: string | null;
+  isMain: boolean;
+  alreadyRegistered: boolean;
+  locked: boolean;
 }
 
 export interface DiffFile {
@@ -131,7 +162,7 @@ export interface CodexThreadSummary {
 }
 
 export interface CodexTaskLinkResult {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   thread: CodexThreadSummary;
 }
 
@@ -174,10 +205,12 @@ export interface ImplementationSendResult {
 
 export interface DiffenderApi {
   projects: {
-    list(): Promise<ProjectRecord[]>;
-    add(): Promise<ProjectRecord | null>;
-    remove(projectId: string): Promise<void>;
-    refresh(projectId?: string): Promise<ProjectRecord[]>;
+    list(): Promise<RepositoryRecord[]>;
+    add(): Promise<AddProjectResult | null>;
+    detectWorktrees(repositoryId: string): Promise<DetectedWorktree[]>;
+    addWorktrees(repositoryId: string, rootPaths: string[]): Promise<RepositoryRecord[]>;
+    remove(worktreeId: string): Promise<RepositoryRecord[]>;
+    refresh(worktreeId?: string): Promise<RepositoryRecord[]>;
   };
   reviews: {
     current(projectId: string): Promise<ReviewSnapshot | null>;
@@ -215,7 +248,7 @@ export interface DiffenderApi {
     tasks(projectId: string, includeAll?: boolean): Promise<CodexThreadSummary[]>;
     createTask(projectId: string): Promise<CodexTaskLinkResult>;
     linkTask(projectId: string, threadId: string): Promise<CodexTaskLinkResult>;
-    unlinkTask(projectId: string): Promise<ProjectRecord>;
+    unlinkTask(projectId: string): Promise<WorktreeRecord>;
     copyFeedback(projectId: string, reviewId: string): Promise<void>;
     sendFeedback(projectId: string, reviewId: string): Promise<CodexTaskSendResult>;
     openTask(threadId: string): Promise<void>;
@@ -223,7 +256,7 @@ export interface DiffenderApi {
   };
   implementations: {
     detect(projectId: string): Promise<ImplementationAgentDetection>;
-    select(projectId: string, agent: ImplementationAgent | null): Promise<ProjectRecord>;
+    select(projectId: string, agent: ImplementationAgent | null): Promise<WorktreeRecord>;
     sendFeedback(projectId: string, reviewId: string): Promise<ImplementationSendResult>;
     onProgress(listener: (event: ImplementationProgressEvent) => void): () => void;
   };
@@ -232,6 +265,8 @@ export interface DiffenderApi {
 export const IPC_CHANNELS = {
   projectsList: "projects:list",
   projectsAdd: "projects:add",
+  projectsDetectWorktrees: "projects:detect-worktrees",
+  projectsAddWorktrees: "projects:add-worktrees",
   projectsRemove: "projects:remove",
   projectsRefresh: "projects:refresh",
   reviewsCurrent: "reviews:current",

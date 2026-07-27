@@ -3,15 +3,16 @@ import {
   detectImplementationAgent,
   inspectProjectAgentSignals,
 } from "../src/main/implementation-agent";
-import type { CodexStatus, ProjectRecord } from "../src/shared/contracts";
+import type { CodexStatus, WorktreeRecord } from "../src/shared/contracts";
 
-const project: ProjectRecord = {
+const project: WorktreeRecord = {
   id: "project-1",
+  repositoryId: "repository-1",
   name: "Sample",
   rootPath: String.raw`C:\Development\Sample`,
   branch: "main",
   headSha: "abc",
-  isWorktree: true,
+  isMain: false,
   hasChanges: true,
   reviewStatus: "complete",
   lastReviewedAt: null,

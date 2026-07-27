@@ -1,9 +1,9 @@
 import type {
   ImplementationAgent,
-  ProjectRecord,
   ReviewFeedbackScope,
   ReviewProgressEvent,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
 
 export function replaceSetValue(
@@ -19,7 +19,7 @@ export function replaceSetValue(
 
 export function progressToReviewStatus(
   stage: ReviewProgressEvent["stage"],
-): ProjectRecord["reviewStatus"] {
+): WorktreeRecord["reviewStatus"] {
   if (stage === "queued") return "queued";
   if (stage === "reading" || stage === "analyzing") return "running";
   if (stage === "complete") return "complete";

@@ -211,6 +211,15 @@ button:disabled {
   padding-inline: 18px;
 }
 
+.primary-button--danger {
+  border-color: var(--critical);
+  background: var(--critical);
+}
+
+.primary-button--danger:hover:not(:disabled) {
+  background: #8a1c14;
+}
+
 .secondary-button,
 .toolbar-button {
   border: 1px solid var(--line-strong);
@@ -331,6 +340,180 @@ button:disabled {
   padding: 8px;
 }
 
+.repository-tree + .repository-tree {
+  margin-top: 10px;
+}
+
+.repository-tree__heading {
+  display: flex;
+  min-width: 0;
+  height: 31px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 7px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.repository-tree__heading strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repository-tree__heading > span {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.repository-tree__detect-button {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+}
+
+.repository-tree__detect-button:disabled {
+  color: var(--ink-faint);
+}
+
+.worktree-detector {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 7px 12px;
+  border-left: 1px solid var(--line-strong);
+  padding: 6px 0 6px 8px;
+}
+
+.worktree-detector__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.worktree-detector__spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: review-spin 760ms linear infinite;
+}
+
+.worktree-detector__error {
+  margin: 0;
+  color: var(--critical);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.worktree-detector__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.worktree-detector__item {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--paper-raised);
+}
+
+.worktree-detector__item--registered {
+  background: var(--paper-deep);
+}
+
+.worktree-detector__item label {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  padding: 6px;
+  cursor: pointer;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+}
+
+.worktree-detector__item--registered label {
+  cursor: default;
+}
+
+.worktree-detector__item input {
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.worktree-detector__details {
+  min-width: 0;
+}
+
+.worktree-detector__name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.worktree-detector__name .icon {
+  flex: 0 0 auto;
+}
+
+.worktree-detector__path {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-detector__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.worktree-detector__meta > span {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0 3px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.worktree-detector__register {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+.repository-tree__worktrees {
+  display: grid;
+  gap: 3px;
+  margin-left: 12px;
+  border-left: 1px solid var(--line-strong);
+  padding-left: 8px;
+}
+
 .project-item-shell {
   position: relative;
   border: 1px solid transparent;
@@ -418,11 +601,21 @@ button:disabled {
   gap: 8px;
 }
 
-.project-item__topline strong {
-  overflow: hidden;
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.project-item__kind {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  padding: 1px 4px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+
+.project-item__badges {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .change-badge {
@@ -434,6 +627,29 @@ button:disabled {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
+}
+
+.missing-badge {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: var(--critical);
+  background: var(--critical-light);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* 削除済み worktree はエラーではなく「削除済み」として淡色＋取り消し線で示す。 */
+.project-item-shell--missing .project-item__kind,
+.project-item-shell--missing .project-item__meta {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
+
+.project-item-shell--missing .project-item__meta .icon {
+  opacity: 0.6;
 }
 
 .project-item__meta {
@@ -453,6 +669,7 @@ button:disabled {
 
 .review-status {
   flex: 0 0 auto;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -2304,6 +2521,11 @@ button:disabled {
   color: var(--accent);
 }
 
+.quiet-state__seal--danger {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
 .quiet-state h2 {
   margin: 6px 0;
   font-family: var(--serif);
@@ -2662,6 +2884,10 @@ button:disabled {
     overflow-x: auto;
   }
 
+  .repository-tree {
+    min-width: 228px;
+  }
+
   .project-item {
     min-width: 210px;
   }
@@ -2879,4 +3105,13 @@ button:disabled {
   .skeleton {
     animation: pulse 1.4s ease-in-out infinite !important;
   }
+}
+
+/* 削除済み worktree の案内（quiet-state 内）で表示する作業フォルダーのパス。 */
+.quiet-state p.quiet-state__path {
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 12px;
 }

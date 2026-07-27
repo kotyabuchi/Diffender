@@ -1,4 +1,4 @@
-import type { ProjectRecord, ReviewProgressEvent } from "../../shared/contracts";
+import type { ReviewProgressEvent, WorktreeRecord } from "../../shared/contracts";
 import { REVIEW_STATUS_LABELS } from "../lib/labels";
 import { progressToReviewStatus } from "../lib/review";
 import { Icon } from "./Icon";
@@ -10,17 +10,20 @@ export function ProjectItem({
   onSelect,
   onRemove,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   selected: boolean;
   progress?: ReviewProgressEvent;
   onSelect: () => void;
   onRemove: () => void;
 }) {
   const status = progress ? progressToReviewStatus(progress.stage) : project.reviewStatus;
+  const missing = project.missing === true;
 
   return (
     <div
-      className={`project-item-shell ${selected ? "project-item-shell--selected" : ""}`}
+      className={`project-item-shell ${selected ? "project-item-shell--selected" : ""} ${
+        missing ? "project-item-shell--missing" : ""
+      }`}
     >
       <button
         aria-current={selected ? "page" : undefined}
@@ -30,28 +33,40 @@ export function ProjectItem({
       >
         <span className="project-item__rail" aria-hidden="true" />
         <span className="project-item__topline">
-          <strong>{project.name}</strong>
-          {project.hasChanges ? (
-            <span className="change-badge" title="未コミットの変更あり">
-              変更
-            </span>
-          ) : null}
+          <span className="project-item__kind">
+            {project.isMain ? "メイン" : "worktree"}
+          </span>
+          <span className="project-item__badges">
+            {missing ? (
+              <span className="missing-badge" title="作業フォルダーが見つかりません">
+                削除済み
+              </span>
+            ) : (
+              <>
+                {project.hasChanges ? (
+                  <span className="change-badge" title="未コミットの変更あり">
+                    変更
+                  </span>
+                ) : null}
+                <span className={`review-status review-status--${status}`}>
+                  {REVIEW_STATUS_LABELS[status]}
+                </span>
+              </>
+            )}
+          </span>
         </span>
         <span className="project-item__meta">
           <span>
             <Icon name="branch" size={13} />
             {project.branch ?? "ブランチ不明"}
           </span>
-          <span className={`review-status review-status--${status}`}>
-            {REVIEW_STATUS_LABELS[status]}
-          </span>
         </span>
       </button>
       <button
-        aria-label={`${project.name} を受信箱から削除`}
+        aria-label={`${project.isMain ? "メイン" : "worktree"}（${project.branch ?? "ブランチ不明"}）をワークスペースから削除`}
         className="project-item__remove"
         onClick={onRemove}
-        title="受信箱から削除"
+        title="ワークスペースから削除"
         type="button"
       >
         <Icon name="close" size={13} />

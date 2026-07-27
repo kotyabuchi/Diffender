@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import type {
-  ProjectRecord,
   ReviewFeedbackScope,
   ReviewGroup,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { formatDate } from "../lib/format";
 import { Icon } from "./Icon";
@@ -20,7 +20,7 @@ export function ReviewReport({
   onAddFeedback,
   onRemoveFeedback,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   snapshot: ReviewSnapshot;
   stale: boolean;
   approvalPending: string | null;

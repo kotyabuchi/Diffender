@@ -11,6 +11,10 @@ const api: DiffenderApi = {
   projects: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.projectsList),
     add: () => ipcRenderer.invoke(IPC_CHANNELS.projectsAdd),
+    detectWorktrees: (repositoryId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.projectsDetectWorktrees, repositoryId),
+    addWorktrees: (repositoryId, rootPaths) =>
+      ipcRenderer.invoke(IPC_CHANNELS.projectsAddWorktrees, repositoryId, rootPaths),
     remove: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.projectsRemove, projectId),
     refresh: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.projectsRefresh, projectId),
   },

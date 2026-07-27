@@ -13,7 +13,8 @@ export type IconName =
   | "open"
   | "refresh"
   | "review"
-  | "spark";
+  | "spark"
+  | "trash";
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   add: <path d="M12 5v14M5 12h14" />,
@@ -67,6 +68,14 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5z" />
       <path d="m19 16 .6 2.4L22 19l-2.4.6L19 22l-.6-2.4L16 19l2.4-.6z" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 7V4h6v3" />
     </>
   ),
 };

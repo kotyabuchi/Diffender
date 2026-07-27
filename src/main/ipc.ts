@@ -25,7 +25,7 @@ export function registerIpcHandlers(
   appServer: CodexAppServer,
   claude: ClaudeRunner,
 ): void {
-  ipcMain.handle(IPC_CHANNELS.projectsList, () => reviewService.listProjects());
+  ipcMain.handle(IPC_CHANNELS.projectsList, () => reviewService.listRepositories());
   ipcMain.handle(IPC_CHANNELS.projectsAdd, async () => {
     const result = await dialog.showOpenDialog(window, {
       title: "Gitプロジェクトを追加",
@@ -35,6 +35,17 @@ export function registerIpcHandlers(
     if (result.canceled || !selected) return null;
     return reviewService.addProject(await validateRepository(selected));
   });
+  ipcMain.handle(IPC_CHANNELS.projectsDetectWorktrees, (_event, repositoryId: unknown) =>
+    reviewService.detectWorktrees(requiredString(repositoryId, "repositoryId")),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.projectsAddWorktrees,
+    (_event, repositoryId: unknown, rootPaths: unknown) =>
+      reviewService.addWorktrees(
+        requiredString(repositoryId, "repositoryId"),
+        requiredRootPaths(rootPaths),
+      ),
+  );
   ipcMain.handle(IPC_CHANNELS.projectsRemove, (_event, projectId: unknown) =>
     reviewService.removeProject(requiredString(projectId, "projectId")),
   );
@@ -113,7 +124,7 @@ export function registerIpcHandlers(
     IPC_CHANNELS.codexTasks,
     (_event, projectId: unknown, includeAll: unknown) =>
       reviewService
-        .getProject(requiredString(projectId, "projectId"))
+        .getWorktree(requiredString(projectId, "projectId"))
         .then((project) =>
           appServer.listThreads(
             project.rootPath,
@@ -123,7 +134,7 @@ export function registerIpcHandlers(
   );
   ipcMain.handle(IPC_CHANNELS.codexTaskCreate, async (_event, projectId: unknown) => {
     const id = requiredString(projectId, "projectId");
-    const project = await reviewService.getProject(id);
+    const project = await reviewService.getWorktree(id);
     const thread = await appServer.createThread(project);
     const updated = await reviewService.linkCodexTask(id, thread.id);
     return { project: updated, thread };
@@ -167,7 +178,7 @@ export function registerIpcHandlers(
         id,
         requiredString(reviewId, "reviewId"),
       );
-      return appServer.sendFeedback(await reviewService.getProject(id), feedback);
+      return appServer.sendFeedback(await reviewService.getWorktree(id), feedback);
     },
   );
   ipcMain.handle(IPC_CHANNELS.codexTaskOpen, async (_event, threadId: unknown) => {
@@ -177,7 +188,7 @@ export function registerIpcHandlers(
   ipcMain.handle(
     IPC_CHANNELS.implementationsDetect,
     async (_event, projectId: unknown) => {
-      const project = await reviewService.getProject(
+      const project = await reviewService.getWorktree(
         requiredString(projectId, "projectId"),
       );
       const [codexState, claudeState] = await Promise.all([
@@ -204,7 +215,7 @@ export function registerIpcHandlers(
     IPC_CHANNELS.implementationsSend,
     async (_event, projectId: unknown, reviewId: unknown) => {
       const id = requiredString(projectId, "projectId");
-      const project = await reviewService.getProject(id);
+      const project = await reviewService.getWorktree(id);
       const [codexState, claudeState, feedback] = await Promise.all([
         codex.status(),
         claude.status(),
@@ -293,6 +304,20 @@ function requiredString(value: unknown, name: string): string {
     throw new TypeError(`${name} must be a non-empty string.`);
   }
   return value;
+}
+
+function requiredRootPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 100) {
+    throw new TypeError("rootPaths must be an array with at most 100 entries.");
+  }
+  const rootPaths: string[] = [];
+  for (const rootPath of value) {
+    if (typeof rootPath !== "string" || rootPath.length === 0 || rootPath.length > 4096) {
+      throw new TypeError("Each rootPaths entry must be a non-empty string.");
+    }
+    rootPaths.push(rootPath);
+  }
+  return rootPaths;
 }
 
 function optionalString(value: unknown, name: string): string | undefined {

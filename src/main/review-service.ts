@@ -1,30 +1,221 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, resolve } from "node:path";
 import type {
+  AddProjectResult,
+  DetectedWorktree,
+  DiffFile,
   ImplementationAgent,
-  ProjectRecord,
+  RepositoryRecord,
+  ReviewFeedback,
   ReviewFeedbackDraft,
   ReviewFeedbackScope,
+  ReviewFinding,
   ReviewGroup,
   ReviewProgressEvent,
   ReviewRunOptions,
   ReviewSnapshot,
+  ReviewStatus,
+  WorktreeRecord,
 } from "../shared/contracts";
 import type { CodexRunner } from "./codex";
 import { groupFingerprint } from "./diff";
-import { collectRepositoryDiff, refreshProject } from "./git";
+import {
+  checkPath,
+  collectRepositoryDiff,
+  describeRepository,
+  listWorktrees,
+  type PathState,
+  type RepositoryResolution,
+  refreshProject,
+  resolveRepositoryInfo,
+  validateRepository,
+} from "./git";
 import type { AtomicJsonStore } from "./store";
+
+type RepositoryResolver = (rootPath: string) => Promise<RepositoryResolution>;
+
+interface WorktreeGroupingEntry {
+  worktree: WorktreeRecord;
+  repositoryKey: string;
+}
 
 const REVIEW_CACHE_VERSION = "ja-review-v2";
 
 export interface AppState {
-  version: 1;
-  projects: ProjectRecord[];
+  version: 2;
+  repositories: RepositoryRecord[];
   snapshots: Record<string, Record<string, ReviewSnapshot>>;
   approvals: Record<string, boolean>;
 }
 
 export function createDefaultState(): AppState {
-  return { version: 1, projects: [], snapshots: {}, approvals: {} };
+  return { version: 2, repositories: [], snapshots: {}, approvals: {} };
+}
+
+export async function migrateStateToV2(
+  raw: unknown,
+  resolveRepoInfo: RepositoryResolver,
+): Promise<AppState> {
+  if (isAppState(raw)) return raw;
+  if (!isLegacyAppState(raw)) {
+    throw new Error("アプリケーション状態の形式またはバージョンを認識できません。");
+  }
+
+  const entries = await Promise.all(
+    raw.projects.map(async (project) => {
+      const resolution = await safeResolveRepository(resolveRepoInfo, project.rootPath);
+      const resolved = resolution.status === "resolved";
+      const worktree: WorktreeRecord = {
+        id: project.id,
+        repositoryId: "",
+        name: project.name,
+        rootPath: project.rootPath,
+        codexThreadId: project.codexThreadId,
+        implementationAgent: project.implementationAgent,
+        branch: project.branch,
+        headSha: project.headSha,
+        isMain: resolved ? resolution.isMain : true,
+        hasChanges: project.hasChanges,
+        reviewStatus: project.reviewStatus,
+        lastReviewedAt: project.lastReviewedAt,
+        // 予期しない解決エラーのみ再統合対象にする（存在しないパスは恒久的に単独扱い）。
+        ...(resolution.status === "error" ? { tentative: true } : {}),
+      };
+      return {
+        worktree,
+        repositoryKey: resolved
+          ? resolution.repositoryKey.toLowerCase()
+          : resolve(project.rootPath).toLowerCase(),
+      };
+    }),
+  );
+
+  return {
+    version: 2,
+    repositories: buildRepositories(entries),
+    snapshots: raw.snapshots,
+    approvals: raw.approvals,
+  };
+}
+
+/**
+ * tentative（暫定的に単独リポジトリへ置いた）worktree を再解決する。成功すれば本来の
+ * リポジトリキーへ移して再統合し、パスが存在しないと確定すれば tentative を解除して
+ * 単独リポジトリのまま確定させる。予期しないエラーが続く間は tentative を維持し、
+ * 次回起動で再度試みる。tentative が無ければ状態をそのまま返す（Git 呼び出しなし）。
+ */
+export async function reconcileWorktrees(
+  state: AppState,
+  resolveRepoInfo: RepositoryResolver,
+): Promise<AppState> {
+  if (!allWorktrees(state).some((worktree) => worktree.tentative === true)) {
+    return state;
+  }
+
+  const entries: WorktreeGroupingEntry[] = [];
+  for (const repository of state.repositories) {
+    for (const worktree of repository.worktrees) {
+      if (worktree.tentative !== true) {
+        entries.push({ worktree, repositoryKey: repository.repositoryKey });
+        continue;
+      }
+      const resolution = await safeResolveRepository(resolveRepoInfo, worktree.rootPath);
+      if (resolution.status === "resolved") {
+        entries.push({
+          worktree: { ...worktree, isMain: resolution.isMain, tentative: undefined },
+          repositoryKey: resolution.repositoryKey.toLowerCase(),
+        });
+      } else if (resolution.status === "missing") {
+        entries.push({
+          worktree: { ...worktree, tentative: undefined },
+          repositoryKey: repository.repositoryKey,
+        });
+      } else {
+        entries.push({ worktree, repositoryKey: repository.repositoryKey });
+      }
+    }
+  }
+
+  return { ...state, repositories: buildRepositories(entries) };
+}
+
+/**
+ * 各 worktree の作業フォルダーの存在を確認し `missing` を更新する。削除・移動された
+ * worktree を起動時（refresh 前）から「削除済み」として扱えるようにするため、状態層で
+ * 権威的に反映する。変更が無ければ同じ状態参照を返す。
+ */
+export async function markMissingWorktrees(
+  state: AppState,
+  check: (rootPath: string) => Promise<PathState> = checkPath,
+): Promise<AppState> {
+  let changed = false;
+  const repositories = await Promise.all(
+    state.repositories.map(async (repository) => {
+      const worktrees = await Promise.all(
+        repository.worktrees.map(async (worktree) => {
+          const pathState = await check(worktree.rootPath);
+          // 復旧可能なエラーでは missing を変更せず、次回の再試行に委ねる。
+          if (pathState === "error") return worktree;
+          const missing = pathState === "absent";
+          if ((worktree.missing ?? false) === missing) return worktree;
+          changed = true;
+          return { ...worktree, missing };
+        }),
+      );
+      return { ...repository, worktrees };
+    }),
+  );
+  return changed ? { ...state, repositories } : state;
+}
+
+export async function loadMigratedState(
+  store: AtomicJsonStore<AppState>,
+  resolveRepoInfo: RepositoryResolver = resolveRepositoryInfo,
+): Promise<AppState> {
+  const migrated = await migrateStateToV2(await store.read(), resolveRepoInfo);
+  const reconciled = await reconcileWorktrees(migrated, resolveRepoInfo);
+  const marked = await markMissingWorktrees(reconciled);
+  await store.write(marked);
+  return marked;
+}
+
+/**
+ * 注入されたリゾルバが例外を投げても、移行・再統合を止めず「予期しないエラー」として
+ * 扱う（tentative にして次回再試行）。既定の resolveRepositoryInfo は例外を投げない。
+ */
+async function safeResolveRepository(
+  resolveRepoInfo: RepositoryResolver,
+  rootPath: string,
+): Promise<RepositoryResolution> {
+  try {
+    return await resolveRepoInfo(rootPath);
+  } catch {
+    return { status: "error" };
+  }
+}
+
+/**
+ * worktree をリポジトリキーでグループ化して RepositoryRecord[] を構築する。repositoryId は
+ * キーから決定論的に導出し、各 worktree の repositoryId も所属リポジトリに揃える。
+ * メイン作業ツリーを先頭に並べ、リポジトリ名はメイン（無ければ先頭）から採る。
+ */
+function buildRepositories(entries: WorktreeGroupingEntry[]): RepositoryRecord[] {
+  const repositoriesByKey = new Map<string, RepositoryRecord>();
+  for (const { worktree, repositoryKey } of entries) {
+    const existing = repositoriesByKey.get(repositoryKey);
+    const repositoryId = existing?.id ?? repositoryIdForKey(repositoryKey);
+    const worktrees = sortWorktrees([
+      ...(existing?.worktrees ?? []),
+      { ...worktree, repositoryId },
+    ]);
+    repositoriesByKey.set(repositoryKey, {
+      id: repositoryId,
+      repositoryKey,
+      name: repositoryName(worktrees),
+      worktrees,
+    });
+  }
+  return [...repositoriesByKey.values()];
 }
 
 export class ReviewService {
@@ -35,63 +226,209 @@ export class ReviewService {
     private readonly progress: (event: ReviewProgressEvent) => void,
   ) {}
 
-  async listProjects(): Promise<ProjectRecord[]> {
-    return (await this.store.read()).projects;
+  async listRepositories(): Promise<RepositoryRecord[]> {
+    return (await this.store.read()).repositories;
   }
 
-  async getProject(projectId: string): Promise<ProjectRecord> {
-    return requireProject(await this.store.read(), projectId);
+  async getRepository(repositoryId: string): Promise<RepositoryRecord> {
+    return findRepository(await this.store.read(), repositoryId);
   }
 
-  async addProject(rootPath: string): Promise<ProjectRecord> {
-    const initial: ProjectRecord = {
+  async getWorktree(worktreeId: string): Promise<WorktreeRecord> {
+    return findWorktree(await this.store.read(), worktreeId);
+  }
+
+  async detectWorktrees(repositoryId: string): Promise<DetectedWorktree[]> {
+    const repository = await this.getRepository(repositoryId);
+    const candidates = sortWorktrees(repository.worktrees);
+    const registeredPaths = new Set(
+      repository.worktrees.map((worktree) => worktree.rootPath.toLowerCase()),
+    );
+    let lastError: unknown;
+
+    for (const candidate of candidates) {
+      try {
+        return (await listWorktrees(candidate.rootPath))
+          .filter((entry) => !entry.isBare)
+          .map((entry) => ({
+            rootPath: entry.rootPath,
+            branch: entry.branch,
+            isMain: entry.isMain,
+            alreadyRegistered: registeredPaths.has(entry.rootPath.toLowerCase()),
+            locked: entry.locked,
+          }));
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError instanceof Error) throw lastError;
+    throw new Error("ワークツリーを検出できませんでした。");
+  }
+
+  async addProject(rootPath: string): Promise<AddProjectResult> {
+    const repositoryInfo = await describeRepository(rootPath);
+    const repositoryId = repositoryIdForKey(repositoryInfo.repositoryKey);
+    const initial: WorktreeRecord = {
       id: randomUUID(),
-      name: rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath,
+      repositoryId,
+      name: worktreeName(rootPath),
       rootPath,
       codexThreadId: null,
       implementationAgent: null,
       branch: null,
       headSha: null,
-      isWorktree: true,
+      isMain: repositoryInfo.isMain,
       hasChanges: false,
       reviewStatus: "idle",
       lastReviewedAt: null,
     };
     const refreshed = await refreshProject(initial);
-    await this.store.update((state) => {
-      const existing = state.projects.find(
-        (project) => project.rootPath.toLowerCase() === refreshed.rootPath.toLowerCase(),
+    const updated = await this.store.update((state) => {
+      const duplicate = allWorktrees(state).find(
+        (worktree) =>
+          worktree.rootPath.toLowerCase() === refreshed.rootPath.toLowerCase(),
       );
-      if (existing) throw new Error("このプロジェクトは既に登録されています。");
-      return { ...state, projects: [...state.projects, refreshed] };
-    });
-    return refreshed;
-  }
+      if (duplicate) throw new Error("このプロジェクトは既に登録されています。");
 
-  async removeProject(projectId: string): Promise<void> {
-    await this.store.update((state) => {
-      const { [projectId]: _removed, ...snapshots } = state.snapshots;
+      const existing = state.repositories.find(
+        (repository) => repository.repositoryKey === repositoryInfo.repositoryKey,
+      );
+      if (existing) {
+        const added = { ...refreshed, repositoryId: existing.id };
+        const worktrees = sortWorktrees([...existing.worktrees, added]);
+        return {
+          ...state,
+          repositories: state.repositories.map((repository) =>
+            repository.id === existing.id
+              ? { ...repository, name: repositoryName(worktrees), worktrees }
+              : repository,
+          ),
+        };
+      }
+
+      const added = { ...refreshed, repositoryId };
       return {
         ...state,
-        projects: state.projects.filter((project) => project.id !== projectId),
+        repositories: [
+          ...state.repositories,
+          {
+            id: repositoryId,
+            name: worktreeName(rootPath),
+            repositoryKey: repositoryInfo.repositoryKey,
+            worktrees: [added],
+          },
+        ],
+      };
+    });
+    return { repositories: updated.repositories, addedWorktreeId: refreshed.id };
+  }
+
+  async addWorktrees(
+    repositoryId: string,
+    rootPaths: string[],
+  ): Promise<RepositoryRecord[]> {
+    const repository = await this.getRepository(repositoryId);
+    const registeredPaths = new Set(
+      repository.worktrees.map((worktree) => worktree.rootPath.toLowerCase()),
+    );
+    const additions: WorktreeRecord[] = [];
+
+    for (const selectedPath of rootPaths) {
+      const rootPath = await validateRepository(selectedPath);
+      const repositoryInfo = await describeRepository(rootPath);
+      if (
+        repositoryInfo.repositoryKey.toLowerCase() !==
+        repository.repositoryKey.toLowerCase()
+      ) {
+        throw new Error("別のリポジトリのワークツリーは登録できません。");
+      }
+
+      const normalizedPath = rootPath.toLowerCase();
+      if (registeredPaths.has(normalizedPath)) continue;
+
+      const initial: WorktreeRecord = {
+        id: randomUUID(),
+        repositoryId: repository.id,
+        name: worktreeName(rootPath),
+        rootPath,
+        codexThreadId: null,
+        implementationAgent: null,
+        branch: null,
+        headSha: null,
+        isMain: repositoryInfo.isMain,
+        hasChanges: false,
+        reviewStatus: "idle",
+        lastReviewedAt: null,
+      };
+      additions.push(await refreshProject(initial));
+      registeredPaths.add(normalizedPath);
+    }
+
+    if (additions.length === 0) return this.listRepositories();
+
+    const updated = await this.store.update((state) => {
+      const current = findRepository(state, repositoryId);
+      const currentPaths = new Set(
+        current.worktrees.map((worktree) => worktree.rootPath.toLowerCase()),
+      );
+      const newWorktrees = additions.filter(
+        (worktree) => !currentPaths.has(worktree.rootPath.toLowerCase()),
+      );
+      if (newWorktrees.length === 0) return state;
+
+      const worktrees = sortWorktrees([...current.worktrees, ...newWorktrees]);
+      return {
+        ...state,
+        repositories: state.repositories.map((candidate) =>
+          candidate.id === repositoryId
+            ? { ...candidate, name: repositoryName(worktrees), worktrees }
+            : candidate,
+        ),
+      };
+    });
+    return updated.repositories;
+  }
+
+  async removeProject(worktreeId: string): Promise<RepositoryRecord[]> {
+    const updated = await this.store.update((state) => {
+      findWorktree(state, worktreeId);
+      const { [worktreeId]: _removed, ...snapshots } = state.snapshots;
+      const repositories = state.repositories.flatMap((repository) => {
+        const worktrees = repository.worktrees.filter(
+          (worktree) => worktree.id !== worktreeId,
+        );
+        return worktrees.length > 0
+          ? [{ ...repository, name: repositoryName(worktrees), worktrees }]
+          : [];
+      });
+      return {
+        ...state,
+        repositories,
         snapshots,
       };
     });
+    return updated.repositories;
   }
 
-  async refreshProjects(projectId?: string): Promise<ProjectRecord[]> {
+  async refreshProjects(worktreeId?: string): Promise<RepositoryRecord[]> {
     const state = await this.store.read();
-    if (projectId && !state.projects.some((project) => project.id === projectId)) {
-      throw new Error("プロジェクトが見つかりません。");
-    }
+    if (worktreeId) findWorktree(state, worktreeId);
     const refreshed = await Promise.all(
-      state.projects.map(async (project) => {
-        if (projectId && project.id !== projectId) return project;
+      allWorktrees(state).map(async (worktree) => {
+        if (worktreeId && worktree.id !== worktreeId) return worktree;
+        const pathState = await checkPath(worktree.rootPath);
+        // 作業フォルダーが不在なら「削除済み」。復旧可能なエラーでは状態を変えず再試行に委ねる。
+        if (pathState === "absent") return { ...worktree, missing: true };
+        if (pathState === "error") return worktree;
         try {
-          const refreshed = await refreshProject(project);
-          if (!refreshed.hasChanges) return refreshed;
-          const diff = await collectRepositoryDiff(refreshed.rootPath);
-          const cached = Object.values(state.snapshots[refreshed.id] ?? {})
+          const refreshedWorktree = {
+            ...(await refreshProject(worktree)),
+            missing: false,
+          };
+          if (!refreshedWorktree.hasChanges) return refreshedWorktree;
+          const diff = await collectRepositoryDiff(refreshedWorktree.rootPath);
+          const cached = Object.values(state.snapshots[refreshedWorktree.id] ?? {})
             .filter((snapshot) => snapshot.diffHash === diff.diffHash)
             .reduce<ReviewSnapshot | null>(
               (newest, snapshot) =>
@@ -100,23 +437,34 @@ export class ReviewService {
             );
           return cached
             ? {
-                ...refreshed,
+                ...refreshedWorktree,
                 reviewStatus: "complete" as const,
                 lastReviewedAt: cached.createdAt,
               }
-            : refreshed;
+            : refreshedWorktree;
         } catch {
-          return { ...project, isWorktree: false, reviewStatus: "failed" as const };
+          return { ...worktree, missing: false, reviewStatus: "failed" as const };
         }
       }),
     );
-    await this.store.update((latest) => ({ ...latest, projects: refreshed }));
-    return refreshed;
+    const refreshedById = new Map(refreshed.map((worktree) => [worktree.id, worktree]));
+    const updated = await this.store.update((latest) => ({
+      ...latest,
+      repositories: latest.repositories.map((repository) => ({
+        ...repository,
+        worktrees: repository.worktrees.map(
+          (worktree) => refreshedById.get(worktree.id) ?? worktree,
+        ),
+      })),
+    }));
+    return updated.repositories;
   }
 
   async currentReview(projectId: string): Promise<ReviewSnapshot | null> {
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
+    // 削除済み（不在）worktree はレビューを持たない。エラーにせず null を返す。
+    if ((await checkPath(project.rootPath)) === "absent") return null;
     const diff = await collectRepositoryDiff(project.rootPath);
     const snapshot = pickCurrentSnapshot(
       state.snapshots[projectId],
@@ -131,7 +479,24 @@ export class ReviewService {
     options: ReviewRunOptions = {},
   ): Promise<ReviewSnapshot> {
     let state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
+    // 作業フォルダーが不在の worktree はレビューできない。状態へ missing を反映して中断する。
+    if ((await checkPath(project.rootPath)) === "absent") {
+      await this.store.update((latest) => ({
+        ...latest,
+        repositories: updateWorktreeRecords(
+          latest.repositories,
+          projectId,
+          (worktree) => ({
+            ...worktree,
+            missing: true,
+          }),
+        ),
+      }));
+      throw new Error(
+        "このワークツリーは削除されています。作業フォルダーが見つかりません。",
+      );
+    }
     this.progress({ projectId, stage: "queued", message: "レビューを準備しています。" });
     await this.setReviewStatus(projectId, "running");
 
@@ -230,7 +595,7 @@ export class ReviewService {
     approved: boolean,
   ): Promise<ReviewSnapshot> {
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
     const entry = findSnapshotEntry(state.snapshots[projectId], reviewId);
     if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
@@ -270,7 +635,7 @@ export class ReviewService {
     note: string,
   ): Promise<ReviewSnapshot> {
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
@@ -321,7 +686,7 @@ export class ReviewService {
     }
 
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
@@ -388,7 +753,7 @@ export class ReviewService {
     feedbackId: string,
   ): Promise<ReviewSnapshot> {
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
     let updatedSnapshot: ReviewSnapshot | null = null;
 
@@ -434,16 +799,17 @@ export class ReviewService {
   async linkCodexTask(
     projectId: string,
     threadId: string | null,
-  ): Promise<ProjectRecord> {
-    let updatedProject: ProjectRecord | null = null;
+  ): Promise<WorktreeRecord> {
+    let updatedProject: WorktreeRecord | null = null;
     await this.store.update((state) => {
-      requireProject(state, projectId);
-      const projects = state.projects.map((project) => {
-        if (project.id !== projectId) return project;
-        updatedProject = { ...project, codexThreadId: threadId };
-        return updatedProject;
-      });
-      return { ...state, projects };
+      findWorktree(state, projectId);
+      return {
+        ...state,
+        repositories: updateWorktreeRecords(state.repositories, projectId, (worktree) => {
+          updatedProject = { ...worktree, codexThreadId: threadId };
+          return updatedProject;
+        }),
+      };
     });
     if (!updatedProject) throw new Error("プロジェクトが見つかりません。");
     return updatedProject;
@@ -452,16 +818,17 @@ export class ReviewService {
   async selectImplementationAgent(
     projectId: string,
     implementationAgent: ImplementationAgent | null,
-  ): Promise<ProjectRecord> {
-    let updatedProject: ProjectRecord | null = null;
+  ): Promise<WorktreeRecord> {
+    let updatedProject: WorktreeRecord | null = null;
     await this.store.update((state) => {
-      requireProject(state, projectId);
-      const projects = state.projects.map((project) => {
-        if (project.id !== projectId) return project;
-        updatedProject = { ...project, implementationAgent };
-        return updatedProject;
-      });
-      return { ...state, projects };
+      findWorktree(state, projectId);
+      return {
+        ...state,
+        repositories: updateWorktreeRecords(state.repositories, projectId, (worktree) => {
+          updatedProject = { ...worktree, implementationAgent };
+          return updatedProject;
+        }),
+      };
     });
     if (!updatedProject) throw new Error("プロジェクトが見つかりません。");
     return updatedProject;
@@ -483,14 +850,14 @@ export class ReviewService {
   private async saveSnapshot(snapshot: ReviewSnapshot): Promise<void> {
     await this.store.update((state) => ({
       ...state,
-      projects: state.projects.map((project) =>
-        project.id === snapshot.projectId
-          ? {
-              ...project,
-              reviewStatus: "complete",
-              lastReviewedAt: snapshot.createdAt,
-            }
-          : project,
+      repositories: updateWorktreeRecords(
+        state.repositories,
+        snapshot.projectId,
+        (worktree) => ({
+          ...worktree,
+          reviewStatus: "complete",
+          lastReviewedAt: snapshot.createdAt,
+        }),
       ),
       snapshots: {
         ...state.snapshots,
@@ -504,29 +871,25 @@ export class ReviewService {
 
   private async setReviewStatus(
     projectId: string,
-    reviewStatus: ProjectRecord["reviewStatus"],
+    reviewStatus: WorktreeRecord["reviewStatus"],
     lastReviewedAt?: string,
   ): Promise<void> {
     await this.store.update((state) => ({
       ...state,
-      projects: state.projects.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              reviewStatus,
-              lastReviewedAt: lastReviewedAt ?? project.lastReviewedAt,
-            }
-          : project,
-      ),
+      repositories: updateWorktreeRecords(state.repositories, projectId, (worktree) => ({
+        ...worktree,
+        reviewStatus,
+        lastReviewedAt: lastReviewedAt ?? worktree.lastReviewedAt,
+      })),
     }));
   }
 
   private async currentSnapshot(
     projectId: string,
     reviewId: string,
-  ): Promise<{ project: ProjectRecord; snapshot: ReviewSnapshot }> {
+  ): Promise<{ project: WorktreeRecord; snapshot: ReviewSnapshot }> {
     const state = await this.store.read();
-    const project = requireProject(state, projectId);
+    const project = findWorktree(state, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
     const entry = findSnapshotEntry(state.snapshots[projectId], reviewId);
     if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
@@ -538,10 +901,288 @@ export class ReviewService {
   }
 }
 
-function requireProject(state: AppState, projectId: string): ProjectRecord {
-  const project = state.projects.find((candidate) => candidate.id === projectId);
-  if (!project) throw new Error("プロジェクトが見つかりません。");
-  return project;
+export function allWorktrees(state: AppState): WorktreeRecord[] {
+  return state.repositories.flatMap((repository) => repository.worktrees);
+}
+
+export function findWorktree(state: AppState, worktreeId: string): WorktreeRecord {
+  const worktree = allWorktrees(state).find((candidate) => candidate.id === worktreeId);
+  if (!worktree) throw new Error("プロジェクトが見つかりません。");
+  return worktree;
+}
+
+function findRepository(state: AppState, repositoryId: string): RepositoryRecord {
+  const repository = state.repositories.find(
+    (candidate) => candidate.id === repositoryId,
+  );
+  if (!repository) throw new Error("リポジトリが見つかりません。");
+  return repository;
+}
+
+function updateWorktreeRecords(
+  repositories: RepositoryRecord[],
+  worktreeId: string,
+  update: (worktree: WorktreeRecord) => WorktreeRecord,
+): RepositoryRecord[] {
+  return repositories.map((repository) => ({
+    ...repository,
+    worktrees: repository.worktrees.map((worktree) =>
+      worktree.id === worktreeId ? update(worktree) : worktree,
+    ),
+  }));
+}
+
+function sortWorktrees(worktrees: WorktreeRecord[]): WorktreeRecord[] {
+  return [...worktrees].sort((left, right) => Number(right.isMain) - Number(left.isMain));
+}
+
+function worktreeName(rootPath: string): string {
+  return basename(rootPath) || rootPath;
+}
+
+function repositoryName(worktrees: WorktreeRecord[]): string {
+  const source = worktrees.find((worktree) => worktree.isMain) ?? worktrees[0];
+  return source ? worktreeName(source.rootPath) : "";
+}
+
+function repositoryIdForKey(repositoryKey: string): string {
+  return createHash("sha256").update(repositoryKey).digest("hex");
+}
+
+interface LegacyProjectRecord {
+  id: string;
+  name: string;
+  rootPath: string;
+  codexThreadId?: string | null;
+  implementationAgent?: ImplementationAgent | null;
+  branch: string | null;
+  headSha: string | null;
+  isWorktree: boolean;
+  hasChanges: boolean;
+  reviewStatus: ReviewStatus;
+  lastReviewedAt: string | null;
+}
+
+interface LegacyAppState {
+  version: 1;
+  projects: LegacyProjectRecord[];
+  snapshots: Record<string, Record<string, ReviewSnapshot>>;
+  approvals: Record<string, boolean>;
+}
+
+function isAppState(value: unknown): value is AppState {
+  if (!isRecord(value) || value.version !== 2) return false;
+  if (
+    !Array.isArray(value.repositories) ||
+    !value.repositories.every(isRepositoryRecord) ||
+    !isSnapshotsRecord(value.snapshots) ||
+    !isBooleanRecord(value.approvals)
+  ) {
+    throw new Error("version 2 のアプリケーション状態が壊れています。");
+  }
+  return true;
+}
+
+function isLegacyAppState(value: unknown): value is LegacyAppState {
+  if (!isRecord(value) || value.version !== 1) return false;
+  if (
+    !Array.isArray(value.projects) ||
+    !value.projects.every(isLegacyProjectRecord) ||
+    !isSnapshotsRecord(value.snapshots) ||
+    !isBooleanRecord(value.approvals)
+  ) {
+    throw new Error("version 1 のアプリケーション状態が壊れています。");
+  }
+  return true;
+}
+
+function isRepositoryRecord(value: unknown): value is RepositoryRecord {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.repositoryKey !== "string" ||
+    !Array.isArray(value.worktrees) ||
+    !value.worktrees.every(isWorktreeRecord)
+  ) {
+    return false;
+  }
+  return value.worktrees.every((worktree) => worktree.repositoryId === value.id);
+}
+
+function isWorktreeRecord(value: unknown): value is WorktreeRecord {
+  return (
+    isRecord(value) &&
+    isProjectFields(value) &&
+    typeof value.repositoryId === "string" &&
+    typeof value.isMain === "boolean" &&
+    (value.tentative === undefined || typeof value.tentative === "boolean") &&
+    (value.missing === undefined || typeof value.missing === "boolean")
+  );
+}
+
+function isLegacyProjectRecord(value: unknown): value is LegacyProjectRecord {
+  return (
+    isRecord(value) && isProjectFields(value) && typeof value.isWorktree === "boolean"
+  );
+}
+
+function isProjectFields(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.rootPath === "string" &&
+    isOptionalNullableString(value.codexThreadId) &&
+    (value.implementationAgent === undefined ||
+      value.implementationAgent === null ||
+      value.implementationAgent === "codex" ||
+      value.implementationAgent === "claude") &&
+    isNullableString(value.branch) &&
+    isNullableString(value.headSha) &&
+    typeof value.hasChanges === "boolean" &&
+    isReviewStatus(value.reviewStatus) &&
+    isNullableString(value.lastReviewedAt)
+  );
+}
+
+function isSnapshotsRecord(
+  value: unknown,
+): value is Record<string, Record<string, ReviewSnapshot>> {
+  return (
+    isRecord(value) &&
+    Object.values(value).every(
+      (projectSnapshots) =>
+        isRecord(projectSnapshots) &&
+        Object.values(projectSnapshots).every(isReviewSnapshot),
+    )
+  );
+}
+
+function isReviewSnapshot(value: unknown): value is ReviewSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.projectId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.diffHash === "string" &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.files) &&
+    value.files.every(isDiffFile) &&
+    Array.isArray(value.groups) &&
+    value.groups.every(isReviewGroup) &&
+    typeof value.additions === "number" &&
+    typeof value.deletions === "number" &&
+    (value.source === "cache" || value.source === "codex") &&
+    isOptionalNullableString(value.model) &&
+    (value.effort === undefined ||
+      value.effort === null ||
+      value.effort === "low" ||
+      value.effort === "medium" ||
+      value.effort === "high" ||
+      value.effort === "xhigh")
+  );
+}
+
+function isDiffFile(value: unknown): value is DiffFile {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.status === "string" &&
+    typeof value.additions === "number" &&
+    typeof value.deletions === "number" &&
+    typeof value.patch === "string" &&
+    typeof value.binary === "boolean"
+  );
+}
+
+function isReviewGroup(value: unknown): value is ReviewGroup {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.intent === "string" &&
+    typeof value.category === "string" &&
+    isRiskLevel(value.risk) &&
+    Array.isArray(value.filePaths) &&
+    value.filePaths.every((path) => typeof path === "string") &&
+    Array.isArray(value.findings) &&
+    value.findings.every(isReviewFinding) &&
+    (value.feedback === undefined ||
+      (Array.isArray(value.feedback) && value.feedback.every(isReviewFeedback))) &&
+    typeof value.approved === "boolean" &&
+    typeof value.fingerprint === "string"
+  );
+}
+
+function isReviewFinding(value: unknown): value is ReviewFinding {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isRiskLevel(value.severity) &&
+    typeof value.file === "string" &&
+    (value.line === null || typeof value.line === "number") &&
+    typeof value.title === "string" &&
+    typeof value.reason === "string" &&
+    typeof value.suggestion === "string" &&
+    (value.reviewerNote === undefined || typeof value.reviewerNote === "string")
+  );
+}
+
+function isReviewFeedback(value: unknown): value is ReviewFeedback {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.body === "string" &&
+    isReviewFeedbackScope(value.scope)
+  );
+}
+
+function isReviewFeedbackScope(value: unknown): value is ReviewFeedbackScope {
+  if (!isRecord(value)) return false;
+  if (value.type === "group") return true;
+  return (
+    value.type === "lines" &&
+    typeof value.file === "string" &&
+    (value.side === "old" || value.side === "new") &&
+    typeof value.startLine === "number" &&
+    typeof value.endLine === "number"
+  );
+}
+
+function isRiskLevel(value: unknown): boolean {
+  return (
+    value === "low" || value === "medium" || value === "high" || value === "critical"
+  );
+}
+
+function isReviewStatus(value: unknown): value is ReviewStatus {
+  return (
+    value === "idle" ||
+    value === "stale" ||
+    value === "queued" ||
+    value === "running" ||
+    value === "complete" ||
+    value === "failed"
+  );
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isOptionalNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || isNullableString(value);
+}
+
+function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  return (
+    isRecord(value) && Object.values(value).every((item) => typeof item === "boolean")
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createSnapshot(
@@ -641,7 +1282,7 @@ function findSnapshotEntry(
 }
 
 export function buildImplementationFeedback(
-  project: ProjectRecord,
+  project: WorktreeRecord,
   snapshot: ReviewSnapshot,
 ): string {
   const groupsWithFeedback = snapshot.groups.flatMap((group) => {

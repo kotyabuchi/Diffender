@@ -4,8 +4,8 @@ import type {
   ImplementationAgent,
   ImplementationAgentDetection,
   ImplementationProgressEvent,
-  ProjectRecord,
   ReviewSnapshot,
+  WorktreeRecord,
 } from "../../shared/contracts";
 import { implementationAgentLabel } from "../lib/review";
 
@@ -19,11 +19,11 @@ export type CodexHandoffBusy =
   | null;
 
 export interface CodexHandoffProps {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   snapshot: ReviewSnapshot;
   stale: boolean;
   taskProgress?: ImplementationProgressEvent;
-  onProjectUpdated: (project: ProjectRecord) => void;
+  onProjectUpdated: (project: WorktreeRecord) => void;
   onError: (title: string, error: unknown) => void;
 }
 

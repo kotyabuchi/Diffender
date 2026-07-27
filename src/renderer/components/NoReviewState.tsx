@@ -1,4 +1,4 @@
-import type { ProjectRecord } from "../../shared/contracts";
+import type { WorktreeRecord } from "../../shared/contracts";
 import { Icon } from "./Icon";
 
 export function NoReviewState({
@@ -6,7 +6,7 @@ export function NoReviewState({
   canReview,
   onRun,
 }: {
-  project: ProjectRecord;
+  project: WorktreeRecord;
   canReview: boolean;
   onRun: () => void;
 }) {
@@ -19,7 +19,7 @@ export function NoReviewState({
         <div>
           <span className="eyebrow">変更なし</span>
           <h2>いま確認する変更はありません</h2>
-          <p>新しい変更が入ったら、上部の「更新」で受信箱に反映できます。</p>
+          <p>新しい変更が入ったら、上部の「更新」でワークスペースに反映できます。</p>
         </div>
       </section>
     );

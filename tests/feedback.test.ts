@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { buildImplementationFeedback } from "../src/main/review-service";
-import type { ProjectRecord, ReviewSnapshot } from "../src/shared/contracts";
+import type { ReviewSnapshot, WorktreeRecord } from "../src/shared/contracts";
 
-const project: ProjectRecord = {
+const project: WorktreeRecord = {
   id: "project-1",
+  repositoryId: "repository-1",
   name: "Sample",
   rootPath: String.raw`C:\Development\Sample`,
   codexThreadId: null,
   branch: "main",
   headSha: "abc",
-  isWorktree: true,
+  isMain: false,
   hasChanges: true,
   reviewStatus: "complete",
   lastReviewedAt: "2026-07-25T00:00:00.000Z",

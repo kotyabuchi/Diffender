@@ -10,13 +10,21 @@ import {
   sendImplementationProgress,
   sendReviewProgress,
 } from "./main/ipc";
-import { type AppState, createDefaultState, ReviewService } from "./main/review-service";
+import {
+  type AppState,
+  createDefaultState,
+  loadMigratedState,
+  ReviewService,
+} from "./main/review-service";
 import { materializeReviewSchema } from "./main/schema";
 import { AtomicJsonStore } from "./main/store";
 
 let mainWindow: BrowserWindow | null = null;
+let storePromise: Promise<AtomicJsonStore<AppState>> | null = null;
 
 async function createWindow(): Promise<void> {
+  const userDataPath = app.getPath("userData");
+  const store = await applicationStore(userDataPath);
   const window = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -34,11 +42,6 @@ async function createWindow(): Promise<void> {
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
 
-  const userDataPath = app.getPath("userData");
-  const store = new AtomicJsonStore<AppState>(
-    join(userDataPath, "diffender-state.json"),
-    createDefaultState,
-  );
   const codex = new CodexRunner();
   const appServer = new CodexAppServer((event) => {
     sendCodexTaskProgress(window, event);
@@ -72,6 +75,17 @@ async function createWindow(): Promise<void> {
       join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
+}
+
+function applicationStore(userDataPath: string): Promise<AtomicJsonStore<AppState>> {
+  if (!storePromise) {
+    const store = new AtomicJsonStore<AppState>(
+      join(userDataPath, "diffender-state.json"),
+      createDefaultState,
+    );
+    storePromise = loadMigratedState(store).then(() => store);
+  }
+  return storePromise;
 }
 
 app.whenReady().then(async () => {

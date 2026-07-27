@@ -5,9 +5,9 @@ import type {
   CodexTaskSendResult,
   CodexThreadStatus,
   CodexThreadSummary,
-  ProjectRecord,
   ReviewEffort,
   ReviewModel,
+  WorktreeRecord,
 } from "../shared/contracts";
 import { resolveCodexInvocation, sanitizedEnvironment } from "./codex";
 
@@ -163,7 +163,7 @@ export class CodexAppServer {
     return toThreadSummary(response.thread);
   }
 
-  async createThread(project: ProjectRecord): Promise<CodexThreadSummary> {
+  async createThread(project: WorktreeRecord): Promise<CodexThreadSummary> {
     const response = await this.request<ThreadResponse>("thread/start", {
       cwd: project.rootPath,
       approvalPolicy: "never",
@@ -181,7 +181,7 @@ export class CodexAppServer {
   }
 
   async sendFeedback(
-    project: ProjectRecord,
+    project: WorktreeRecord,
     feedback: string,
   ): Promise<CodexTaskSendResult> {
     const threadId = project.codexThreadId;
