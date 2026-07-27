@@ -23,7 +23,7 @@ export function ReviewReport({
   project: WorktreeRecord;
   snapshot: ReviewSnapshot;
   stale: boolean;
-  approvalPending: string | null;
+  approvalPending: ReadonlySet<string>;
   onApprove: (group: ReviewGroup) => void;
   onSaveFindingNote: (findingId: string, note: string) => Promise<void>;
   onAddFeedback: (
@@ -110,7 +110,7 @@ export function ReviewReport({
         <div className="review-groups">
           {snapshot.groups.map((group, index) => (
             <ReviewGroupSection
-              approvalPending={approvalPending === group.id}
+              approvalPending={approvalPending.has(group.id)}
               group={group}
               index={index}
               key={group.id}

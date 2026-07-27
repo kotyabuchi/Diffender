@@ -16,6 +16,7 @@ import type {
   ReviewSnapshot,
   WorktreeRecord,
 } from "../../shared/contracts";
+import { updateGroupApproval } from "../../shared/review";
 import { updateWorktree } from "../lib/repositories";
 import { replaceSetValue } from "../lib/review";
 
@@ -44,7 +45,10 @@ export function useReviewActions({
 }) {
   const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
-  const [approvalPending, setApprovalPending] = useState<string | null>(null);
+  const [approvalPending, setApprovalPending] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const approvalPendingRef = useRef(new Set<string>());
   const snapshotRequest = useRef(0);
 
   const loadSnapshot = useCallback(
@@ -172,30 +176,69 @@ export function useReviewActions({
     }
   }, [selectedProject, setBusyProjectIds, setProgressByProject, setProjects, showError]);
 
+  const approvalProjectId = selectedProject?.id ?? null;
+  const approvalReviewId = snapshot?.id ?? null;
   const approveGroup = useCallback(
     async (group: ReviewGroup) => {
-      if (!selectedProject || !snapshot) return;
-      setApprovalPending(group.id);
+      if (
+        !approvalProjectId ||
+        !approvalReviewId ||
+        approvalPendingRef.current.has(group.id)
+      ) {
+        return;
+      }
+
+      const previousApproved = group.approved;
+      const nextApproved = !previousApproved;
+      approvalPendingRef.current.add(group.id);
+      setApprovalPending(new Set(approvalPendingRef.current));
       clearError();
+      setSnapshot((current) =>
+        current?.id === approvalReviewId
+          ? updateGroupApproval(current, group.id, nextApproved)
+          : current,
+      );
+
       try {
         const updated = await window.diffender.reviews.approve(
-          selectedProject.id,
-          snapshot.id,
+          approvalProjectId,
+          approvalReviewId,
           group.id,
-          !group.approved,
+          nextApproved,
         );
-        if (selectedProjectIdRef.current === selectedProject.id) {
-          setSnapshot(updated);
+        if (selectedProjectIdRef.current === approvalProjectId) {
+          const persistedGroup = updated.groups.find(
+            (candidate) => candidate.id === group.id,
+          );
+          if (persistedGroup) {
+            setSnapshot((current) =>
+              current?.id === approvalReviewId
+                ? updateGroupApproval(current, group.id, persistedGroup.approved)
+                : current,
+            );
+          }
         }
       } catch (caught) {
+        if (selectedProjectIdRef.current === approvalProjectId) {
+          setSnapshot((current) => {
+            if (!current || current.id !== approvalReviewId) return current;
+            const currentGroup = current.groups.find(
+              (candidate) => candidate.id === group.id,
+            );
+            return currentGroup?.approved === nextApproved
+              ? updateGroupApproval(current, group.id, previousApproved)
+              : current;
+          });
+        }
         showError("承認状態を保存できませんでした", caught, () => {
           void approveGroup(group);
         });
       } finally {
-        setApprovalPending(null);
+        approvalPendingRef.current.delete(group.id);
+        setApprovalPending(new Set(approvalPendingRef.current));
       }
     },
-    [clearError, selectedProject, selectedProjectIdRef, showError, snapshot],
+    [approvalProjectId, approvalReviewId, clearError, selectedProjectIdRef, showError],
   );
 
   const saveFindingNote = useCallback(

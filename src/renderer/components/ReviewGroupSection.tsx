@@ -116,6 +116,7 @@ export function ReviewGroupSection({
           <p>{group.intent}</p>
         </div>
         <button
+          aria-busy={approvalPending}
           aria-pressed={group.approved}
           className={`approval-button ${group.approved ? "approval-button--approved" : ""}`}
           disabled={approvalPending || readOnly}

@@ -17,6 +17,7 @@ import type {
   ReviewStatus,
   WorktreeRecord,
 } from "../shared/contracts";
+import { updateGroupApproval } from "../shared/review";
 import type { CodexRunner } from "./codex";
 import { groupFingerprint } from "./diff";
 import {
@@ -594,37 +595,39 @@ export class ReviewService {
     groupId: string,
     approved: boolean,
   ): Promise<ReviewSnapshot> {
-    const state = await this.store.read();
-    const project = findWorktree(state, projectId);
+    const initialState = await this.store.read();
+    const project = findWorktree(initialState, projectId);
     const diff = await collectRepositoryDiff(project.rootPath);
-    const entry = findSnapshotEntry(state.snapshots[projectId], reviewId);
-    if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
-      throw new Error("レビューが古くなっています。再レビューしてから承認してください。");
-    }
-    const { key: cacheKey, snapshot } = entry;
-    const group = snapshot.groups.find((candidate) => candidate.id === groupId);
-    if (!group) throw new Error("対象の変更グループが見つかりません。");
-    const expectedFingerprint = groupFingerprint(diff.diffHash, group);
-    if (group.fingerprint !== expectedFingerprint) {
-      throw new Error("変更グループの整合性を確認できませんでした。");
-    }
-    const updated = {
-      ...snapshot,
-      groups: snapshot.groups.map((candidate) =>
-        candidate.id === groupId ? { ...candidate, approved } : candidate,
-      ),
-    };
-    await this.store.update((latest) => ({
-      ...latest,
-      approvals: { ...latest.approvals, [expectedFingerprint]: approved },
-      snapshots: {
-        ...latest.snapshots,
-        [projectId]: {
-          ...latest.snapshots[projectId],
-          [cacheKey]: updated,
+    let updated: ReviewSnapshot | undefined;
+
+    await this.store.update((latest) => {
+      const entry = findSnapshotEntry(latest.snapshots[projectId], reviewId);
+      if (!entry || entry.snapshot.diffHash !== diff.diffHash) {
+        throw new Error(
+          "レビューが古くなっています。再レビューしてから承認してください。",
+        );
+      }
+      const { key: cacheKey, snapshot } = entry;
+      const group = snapshot.groups.find((candidate) => candidate.id === groupId);
+      if (!group) throw new Error("対象の変更グループが見つかりません。");
+      const expectedFingerprint = groupFingerprint(diff.diffHash, group);
+      if (group.fingerprint !== expectedFingerprint) {
+        throw new Error("変更グループの整合性を確認できませんでした。");
+      }
+      updated = updateGroupApproval(snapshot, groupId, approved);
+      return {
+        ...latest,
+        approvals: { ...latest.approvals, [expectedFingerprint]: approved },
+        snapshots: {
+          ...latest.snapshots,
+          [projectId]: {
+            ...latest.snapshots[projectId],
+            [cacheKey]: updated,
+          },
         },
-      },
-    }));
+      };
+    });
+    if (!updated) throw new Error("承認状態を更新できませんでした。");
     return updated;
   }
 

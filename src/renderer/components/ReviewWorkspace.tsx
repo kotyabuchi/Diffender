@@ -35,7 +35,7 @@ export function ReviewWorkspace({
   isReviewing: boolean;
   snapshotLoading: boolean;
   selectedProgress: ReviewProgressEvent | undefined;
-  approvalPending: string | null;
+  approvalPending: ReadonlySet<string>;
   canReview: boolean;
   taskProgress?: ImplementationProgressEvent;
   onCancel: () => void;
