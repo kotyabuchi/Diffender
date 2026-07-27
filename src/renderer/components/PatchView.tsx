@@ -5,6 +5,7 @@ import type {
   ReviewFeedback,
   ReviewFeedbackScope,
 } from "../../shared/contracts";
+import { Icon } from "./Icon";
 
 type PatchRowKind = "addition" | "deletion" | "context" | "hunk";
 
@@ -158,7 +159,9 @@ export const FeedbackComposer = memo(function FeedbackComposer({
   const expanded = focused || body.trim().length > 0 || state === "saving";
 
   return (
-    <div className={`feedback-composer${expanded ? "" : " feedback-composer--collapsed"}`}>
+    <div
+      className={`feedback-composer${expanded ? "" : " feedback-composer--collapsed"}`}
+    >
       {expanded ? (
         <div className="feedback-composer__target">
           <span aria-hidden="true">自</span>
@@ -283,10 +286,13 @@ const PatchRowView = memo(function PatchRowView({
             onBeginDrag("old", rowIndex, row.hunkId);
           }}
           onMouseEnter={() => onExtendDrag("old", rowIndex, row.hunkId)}
-          title="ドラッグして行範囲を選択"
+          title="クリックで行にフィードバック、ドラッグで範囲選択"
           type="button"
         >
-          {row.oldLine}
+          <span className="patch__feedback-icon">
+            <Icon name="add" size={10} />
+          </span>
+          <span>{row.oldLine}</span>
         </button>
       )}
       {row.newLine === null ? (
@@ -304,10 +310,13 @@ const PatchRowView = memo(function PatchRowView({
             onBeginDrag("new", rowIndex, row.hunkId);
           }}
           onMouseEnter={() => onExtendDrag("new", rowIndex, row.hunkId)}
-          title="ドラッグして行範囲を選択"
+          title="クリックで行にフィードバック、ドラッグで範囲選択"
           type="button"
         >
-          {row.newLine}
+          <span className="patch__feedback-icon">
+            <Icon name="add" size={10} />
+          </span>
+          <span>{row.newLine}</span>
         </button>
       )}
       <span className="patch__marker" aria-hidden="true">
