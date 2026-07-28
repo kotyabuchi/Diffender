@@ -5,9 +5,11 @@ import { Icon } from "./Icon";
 
 export function WorktreeDetector({
   repository,
+  disabled,
   onRegistered,
 }: {
   repository: RepositoryRecord;
+  disabled: boolean;
   onRegistered: (repositories: RepositoryRecord[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -19,6 +21,8 @@ export function WorktreeDetector({
   const panelId = `worktree-detector-${repository.id}`;
 
   async function toggleDetector() {
+    if (disabled) return;
+
     if (expanded) {
       setExpanded(false);
       return;
@@ -39,6 +43,8 @@ export function WorktreeDetector({
   }
 
   function togglePath(rootPath: string) {
+    if (disabled) return;
+
     setSelectedPaths((current) => {
       const next = new Set(current);
       if (next.has(rootPath)) {
@@ -51,7 +57,7 @@ export function WorktreeDetector({
   }
 
   async function registerSelected() {
-    if (selectedPaths.size === 0) return;
+    if (disabled || selectedPaths.size === 0) return;
 
     setError(null);
     setRegistering(true);
@@ -83,7 +89,7 @@ export function WorktreeDetector({
           aria-expanded={expanded}
           aria-label={`「${repository.name}」のワークツリーを検出`}
           className="icon-button repository-tree__detect-button"
-          disabled={loading || registering}
+          disabled={disabled || loading || registering}
           onClick={() => void toggleDetector()}
           title="ワークツリーを検出"
           type="button"
@@ -136,7 +142,7 @@ export function WorktreeDetector({
                           worktree.alreadyRegistered ||
                           selectedPaths.has(worktree.rootPath)
                         }
-                        disabled={worktree.alreadyRegistered || registering}
+                        disabled={disabled || worktree.alreadyRegistered || registering}
                         onChange={() => togglePath(worktree.rootPath)}
                         type="checkbox"
                       />
@@ -164,7 +170,7 @@ export function WorktreeDetector({
               </ul>
               <button
                 className="primary-button worktree-detector__register"
-                disabled={selectedPaths.size === 0 || registering}
+                disabled={disabled || selectedPaths.size === 0 || registering}
                 onClick={() => void registerSelected()}
                 type="button"
               >

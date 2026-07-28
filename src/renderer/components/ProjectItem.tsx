@@ -7,12 +7,14 @@ export function ProjectItem({
   project,
   selected,
   progress,
+  disabled,
   onSelect,
   onRemove,
 }: {
   project: WorktreeRecord;
   selected: boolean;
   progress?: ReviewProgressEvent;
+  disabled: boolean;
   onSelect: () => void;
   onRemove: () => void;
 }) {
@@ -28,6 +30,7 @@ export function ProjectItem({
       <button
         aria-current={selected ? "page" : undefined}
         className="project-item"
+        disabled={disabled}
         onClick={onSelect}
         type="button"
       >
@@ -65,6 +68,7 @@ export function ProjectItem({
       <button
         aria-label={`${project.isMain ? "メイン" : "worktree"}（${project.branch ?? "ブランチ不明"}）をワークスペースから削除`}
         className="project-item__remove"
+        disabled={disabled}
         onClick={onRemove}
         title="ワークスペースから削除"
         type="button"

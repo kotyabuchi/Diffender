@@ -32,19 +32,22 @@ export function ReviewOverviewHeader({
         <strong title={snapshot.summary}>{getReviewHeadline(snapshot.summary)}</strong>
       </div>
       <div className="review-overview-header__status">
-        <div
-          aria-label={`${snapshot.files.length}ファイル、${metrics.hunks}チャンク、追加${snapshot.additions}行、削除${snapshot.deletions}行`}
-          className="diff-volume"
-        >
+        <div className="review-metrics">
           <span>
-            <b>{snapshot.files.length}</b> files
+            <small>グループ</small>
+            <b>{snapshot.groups.length}</b>
           </span>
-          <i aria-hidden="true">/</i>
-          <span>
-            <b>{metrics.hunks}</b> hunks
+          <span title={`${metrics.hunks}チャンク`}>
+            <small>差分</small>
+            <b>{metrics.hunks}</b>
           </span>
-          <strong className="diff-volume__additions">+{snapshot.additions}</strong>
-          <strong className="diff-volume__deletions">−{snapshot.deletions}</strong>
+          <span title={`追加${snapshot.additions}行、削除${snapshot.deletions}行`}>
+            <small>変更行</small>
+            <b className="review-metric-delta">
+              <span>+{snapshot.additions}</span>
+              <span>−{snapshot.deletions}</span>
+            </b>
+          </span>
         </div>
         <div className="approval-progress">
           <span

@@ -8,7 +8,6 @@ import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProjectToolbar } from "./components/ProjectToolbar";
 import { ReviewOverviewHeader } from "./components/ReviewOverviewHeader";
 import { ReviewWorkspace } from "./components/ReviewWorkspace";
-import { Topbar } from "./components/Topbar";
 import { useReviewActions } from "./hooks/useReviewActions";
 import { useReviewModels } from "./hooks/useReviewModels";
 import { useReviewProgress } from "./hooks/useReviewProgress";
@@ -199,100 +198,99 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Topbar
-        codexStatus={codexStatus}
-        initializing={initializing}
-        onAddProject={() => void addProject()}
-        onRefresh={() => void refreshProjects()}
-        refreshing={refreshing}
-      />
+      <div className="desk-layout">
+        <ProjectSidebar
+          codexStatus={codexStatus}
+          initializing={initializing}
+          onAddProject={() => void addProject()}
+          onRefresh={() => void refreshProjects()}
+          onRemove={(project) => void removeProject(project)}
+          onSelect={(worktreeId) => setSelectedWorktreeId(worktreeId)}
+          onWorktreesRegistered={setRepositories}
+          progressByProject={progressByProject}
+          refreshing={refreshing}
+          repositories={repositories}
+          selectedWorktreeId={selectedWorktreeId}
+        />
 
-      {initializing ? (
-        <div className="loading-screen">
-          <span className="progress-panel__spinner" />
-          ワークスペースを準備しています
-        </div>
-      ) : repositories.length === 0 ? (
-        <>
-          {error ? (
-            <div className="global-error">
-              <ErrorNotice error={error} onDismiss={() => setError(null)} />
+        <main className="main-pane">
+          {initializing ? (
+            <div className="loading-screen">
+              <span className="progress-panel__spinner" />
+              ワークスペースを準備しています
             </div>
-          ) : null}
-          <EmptyInbox onAdd={() => void addProject()} />
-        </>
-      ) : (
-        <div className="desk-layout">
-          <ProjectSidebar
-            onRemove={(project) => void removeProject(project)}
-            onSelect={(worktreeId) => setSelectedWorktreeId(worktreeId)}
-            onWorktreesRegistered={setRepositories}
-            progressByProject={progressByProject}
-            repositories={repositories}
-            selectedWorktreeId={selectedWorktreeId}
-          />
+          ) : repositories.length === 0 ? (
+            <>
+              {error ? (
+                <div className="global-error">
+                  <ErrorNotice error={error} onDismiss={() => setError(null)} />
+                </div>
+              ) : null}
+              <EmptyInbox onAdd={() => void addProject()} />
+            </>
+          ) : (
+            <>
+              {error ? (
+                <ErrorNotice error={error} onDismiss={() => setError(null)} />
+              ) : null}
 
-          <main className="main-pane">
-            {error ? (
-              <ErrorNotice error={error} onDismiss={() => setError(null)} />
-            ) : null}
+              {selectedWorktree ? (
+                selectedWorktree.missing ? (
+                  <MissingWorktreeNotice
+                    onRemove={() => void removeProject(selectedWorktree)}
+                    worktree={selectedWorktree}
+                  />
+                ) : (
+                  <>
+                    {snapshot ? (
+                      <ReviewOverviewHeader
+                        snapshot={snapshot}
+                        stale={selectedWorktree.reviewStatus === "stale"}
+                      />
+                    ) : null}
 
-            {selectedWorktree ? (
-              selectedWorktree.missing ? (
-                <MissingWorktreeNotice
-                  onRemove={() => void removeProject(selectedWorktree)}
-                  worktree={selectedWorktree}
-                />
-              ) : (
-                <>
-                  {snapshot ? (
-                    <ReviewOverviewHeader
+                    <ProjectToolbar
+                      canReview={canReview}
+                      effortOptions={effortOptions}
+                      isReviewing={isReviewing}
+                      models={models}
+                      onCancel={() => void cancelReview()}
+                      onRun={() => void runReview()}
+                      project={selectedWorktree}
+                      selectedEffort={selectedEffort}
+                      selectedModelId={selectedModelId}
+                      setSelectedEffort={setSelectedEffort}
+                      setSelectedModelId={setSelectedModelId}
                       snapshot={snapshot}
-                      stale={selectedWorktree.reviewStatus === "stale"}
                     />
-                  ) : null}
 
-                  <ProjectToolbar
-                    canReview={canReview}
-                    effortOptions={effortOptions}
-                    isReviewing={isReviewing}
-                    models={models}
-                    onCancel={() => void cancelReview()}
-                    onRun={() => void runReview()}
-                    project={selectedWorktree}
-                    selectedEffort={selectedEffort}
-                    selectedModelId={selectedModelId}
-                    setSelectedEffort={setSelectedEffort}
-                    setSelectedModelId={setSelectedModelId}
-                    snapshot={snapshot}
-                  />
-
-                  <ReviewWorkspace
-                    approvalPending={approvalPending}
-                    canReview={canReview}
-                    isReviewing={isReviewing}
-                    onAddFeedback={addFeedback}
-                    onApprove={approveGroup}
-                    onCancel={cancelReview}
-                    onError={(title, caught) => showError(title, caught)}
-                    onProjectUpdated={updateProject}
-                    onRemoveFeedback={removeFeedback}
-                    onRun={() => void runReview()}
-                    onSaveFindingNote={saveFindingNote}
-                    project={selectedWorktree}
-                    selectedProgress={selectedProgress}
-                    snapshot={snapshot}
-                    snapshotLoading={snapshotLoading}
-                    taskProgress={taskProgressByProject[selectedWorktree.id]}
-                  />
-                </>
-              )
-            ) : (
-              <LoadingWorkspace />
-            )}
-          </main>
-        </div>
-      )}
+                    <ReviewWorkspace
+                      approvalPending={approvalPending}
+                      canReview={canReview}
+                      isReviewing={isReviewing}
+                      onAddFeedback={addFeedback}
+                      onApprove={approveGroup}
+                      onCancel={cancelReview}
+                      onError={(title, caught) => showError(title, caught)}
+                      onProjectUpdated={updateProject}
+                      onRemoveFeedback={removeFeedback}
+                      onRun={() => void runReview()}
+                      onSaveFindingNote={saveFindingNote}
+                      project={selectedWorktree}
+                      selectedProgress={selectedProgress}
+                      snapshot={snapshot}
+                      snapshotLoading={snapshotLoading}
+                      taskProgress={taskProgressByProject[selectedWorktree.id]}
+                    />
+                  </>
+                )
+              ) : (
+                <LoadingWorkspace />
+              )}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
