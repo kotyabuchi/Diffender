@@ -62,6 +62,12 @@ const api: DiffenderApi = {
       ipcRenderer.on(IPC_CHANNELS.reviewsProgress, wrapped);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.reviewsProgress, wrapped);
     },
+    onOpenRequested: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, projectId: string) =>
+        listener(projectId);
+      ipcRenderer.on(IPC_CHANNELS.reviewsOpenRequested, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.reviewsOpenRequested, wrapped);
+    },
   },
   codex: {
     status: () => ipcRenderer.invoke(IPC_CHANNELS.codexStatus),

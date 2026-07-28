@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Notification } from "electron";
 import { ClaudeRunner } from "./main/claude";
 import { CodexRunner } from "./main/codex";
 import { CodexAppServer } from "./main/codex-app-server";
@@ -11,6 +11,11 @@ import {
   sendReviewProgress,
 } from "./main/ipc";
 import {
+  configureWindowsNotificationIdentity,
+  notifyReviewCompletion,
+  type ReviewNotificationGateway,
+} from "./main/review-notification";
+import {
   type AppState,
   createDefaultState,
   loadMigratedState,
@@ -18,9 +23,29 @@ import {
 } from "./main/review-service";
 import { materializeReviewSchema } from "./main/schema";
 import { AtomicJsonStore } from "./main/store";
+import { IPC_CHANNELS } from "./shared/contracts";
 
 let mainWindow: BrowserWindow | null = null;
 let storePromise: Promise<AtomicJsonStore<AppState>> | null = null;
+const activeReviewNotifications = new Set<Notification>();
+const reviewNotifications: ReviewNotificationGateway = {
+  isSupported: () => Notification.isSupported(),
+  show: ({ onClick, ...options }) => {
+    const notification = new Notification(options);
+    activeReviewNotifications.add(notification);
+    notification.once("click", () => {
+      activeReviewNotifications.delete(notification);
+      onClick();
+    });
+    notification.once("close", () => activeReviewNotifications.delete(notification));
+    notification.show();
+  },
+};
+configureWindowsNotificationIdentity(
+  process.platform,
+  process.execPath,
+  (appUserModelId) => app.setAppUserModelId(appUserModelId),
+);
 
 async function createWindow(): Promise<void> {
   const userDataPath = app.getPath("userData");
@@ -55,9 +80,16 @@ async function createWindow(): Promise<void> {
   });
   const claude = new ClaudeRunner((event) => sendImplementationProgress(window, event));
   const schemaPath = await materializeReviewSchema(userDataPath);
-  const service = new ReviewService(store, codex, schemaPath, (event) =>
-    sendReviewProgress(window, event),
-  );
+  const service = new ReviewService(store, codex, schemaPath, (event) => {
+    sendReviewProgress(window, event);
+    notifyReviewCompletion(event, reviewNotifications, (projectId) => {
+      if (window.isDestroyed()) return;
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      window.webContents.send(IPC_CHANNELS.reviewsOpenRequested, projectId);
+    });
+  });
   registerIpcHandlers(window, service, codex, appServer, claude);
 
   window.once("ready-to-show", () => window.show());

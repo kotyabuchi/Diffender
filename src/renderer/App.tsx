@@ -121,6 +121,14 @@ export function App() {
     selectedWorktreeIdRef.current = selectedWorktreeId;
   }, [selectedWorktreeId]);
 
+  useEffect(
+    () =>
+      window.diffender.reviews.onOpenRequested((worktreeId) => {
+        setSelectedWorktreeId(worktreeId);
+      }),
+    [],
+  );
+
   const refreshProjects = useCallback(async () => {
     setRefreshing(true);
     setError(null);

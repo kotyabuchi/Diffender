@@ -242,6 +242,7 @@ export interface DiffenderApi {
       feedbackId: string,
     ): Promise<ReviewSnapshot>;
     onProgress(listener: (event: ReviewProgressEvent) => void): () => void;
+    onOpenRequested(listener: (projectId: string) => void): () => void;
   };
   codex: {
     status(): Promise<CodexStatus>;
@@ -278,6 +279,7 @@ export const IPC_CHANNELS = {
   reviewsFeedbackAdd: "reviews:feedback-add",
   reviewsFeedbackRemove: "reviews:feedback-remove",
   reviewsProgress: "reviews:progress",
+  reviewsOpenRequested: "reviews:open-requested",
   codexStatus: "codex:status",
   codexTasks: "codex:tasks",
   codexTaskCreate: "codex:task-create",
