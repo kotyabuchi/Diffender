@@ -1,5 +1,7 @@
 # Diffender
 
+![Diffender のレビュー画面](docs/images/app.png)
+
 ローカルの Git リポジトリ／worktree にある未コミット変更を、ひとつの受信箱で確認するための Electron デスクトップアプリです。差分を表示し、保存済みの ChatGPT 認証を使う Codex CLI に読み取り専用レビューを依頼し、目的単位のグループ・リスク・指摘を確認して承認できます。確認後は、未承認項目と自分のメモを既存または新規の Codex タスクへ引き渡せます。
 
 > 現在は MVP（`0.1.0`）です。Diffender 自身はコミット、push、PR 作成を行いません。「フィードバックを送る」を明示的に実行した場合だけ、紐付けた Codex タスクが対象プロジェクト内を変更します。承認はローカル記録であり、Git やホスティングサービスの承認とは別物です。
@@ -62,6 +64,16 @@ pnpm test:watch  # Vitest の watch mode
 pnpm package     # unpacked application を作成
 pnpm make        # Windows ZIP 配布物を作成
 ```
+
+### デモモード（README スクリーンショット用）
+
+`DIFFENDER_DEMO_MODE=1` を指定して起動すると、Git・Codex・Claude Code へ一切アクセスせず、固定のモックデータでレビュー画面を表示します。README 冒頭の画像はこのモードで生成しています。
+
+```bash
+DIFFENDER_DEMO_MODE=1 pnpm start
+```
+
+`DIFFENDER_DEMO_SCREENSHOT` に出力先を指定すると、描画後に Electron の `capturePage()` で PNG を書き出してアプリを終了します（未指定なら終了せず、対話的に確認できます）。GitHub Actions の **Update demo screenshot** ワークフローを手動実行すると、`docs/images/app.png` を再生成し、画像に差分があるときだけ自動コミットします。
 
 ## 基本的な使い方
 
