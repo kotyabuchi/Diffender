@@ -1,0 +1,79 @@
+name: Update demo screenshot
+
+# README 用のスクリーンショット (docs/images/app.png) をデモモードで生成する。
+# 手動実行のみ。画像に差分があるときだけ自動コミットする。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Electron runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libgbm1 \
+            libgtk-3-0 \
+            libasound2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libxfixes3 \
+            libxext6
+
+      - name: Package application
+        run: pnpm package
+
+      - name: Capture screenshot in demo mode
+        env:
+          DIFFENDER_DEMO_MODE: "1"
+          DIFFENDER_DEMO_SCREENSHOT: docs/images/app.png
+          DIFFENDER_DEMO_CAPTURE_DELAY: "4000"
+        run: |
+          binary="$(find out -maxdepth 2 -name diffender -type f | head -n 1)"
+          if [ -z "$binary" ]; then
+            echo "Packaged binary not found under out/." >&2
+            exit 1
+          fi
+          echo "Running $binary in demo mode."
+          xvfb-run -a --server-args="-screen 0 1600x1400x24" \
+            "$binary" --no-sandbox
+          test -f docs/images/app.png
+
+      - name: Commit screenshot if changed
+        run: |
+          if [ -n "$(git status --porcelain docs/images/app.png)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/images/app.png
+            git commit -m "docs: update demo screenshot [skip ci]"
+            git push
+          else
+            echo "Screenshot unchanged; nothing to commit."
+          fi
